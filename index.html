@@ -32,13 +32,18 @@
     min-height:100%;
   }
   body{
-    background:linear-gradient(180deg,var(--sky-top) 0%, var(--sky-bottom) 100%);
     display:flex;
     justify-content:center;
     align-items:flex-start;
-    min-height:100vh;
     overflow-x:hidden;
     position:relative;
+  }
+  .sky-bg{
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    background:linear-gradient(180deg,var(--sky-top) 0%, var(--sky-bottom) 100%);
+    pointer-events:none;
   }
   /* decorative background silhouettes */
   .bg-plane{
@@ -495,6 +500,7 @@
 
 
 
+<div class="sky-bg"></div>
 <div class="app">
   <header class="app-header">
     <div class="title-block">
@@ -578,7 +584,7 @@
 
     <div id="tab-metar" class="tab-content">
       <div class="section-title">METAR / TAF SORGULAMA</div>
-      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle birden fazla ücretsiz ara sunucu (proxy) AYNI ANDA denenir, hangisi önce yanıt verirse o kullanılır.</div>
+      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle ücretsiz bir ara sunucu (proxy) kullanılır; METAR önce gösterilir, TAF arkadan gelir. Yoğunluk anlarında birkaç saniye sürebilir.</div>
 
       <div class="field">
         <div class="icon blue">🛰️</div>
@@ -865,9 +871,9 @@ function ucusKuraliBelirle(metarText){
 
 /* birden fazla CORS proxy'sini sırayla dener, her birine zaman aşımı koyar */
 const METAR_PROXIES = [
-  url => "https://corsproxy.io/?url=" + encodeURIComponent(url),
   url => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
   url => "https://thingproxy.freeboard.io/fetch/" + url,
+  url => "https://corsproxy.io/?url=" + encodeURIComponent(url),
 ];
 
 async function fetchIleZamanAsimi(url, ms){
@@ -887,13 +893,39 @@ async function fetchIleZamanAsimi(url, ms){
 }
 
 async function proxyIleGetir(hedefUrl){
-  // tüm proxy'leri AYNI ANDA dener, ilk başarılı yanıtı kullanır (en yavaşı beklemez)
-  const denemeler = METAR_PROXIES.map(proxyFn => fetchIleZamanAsimi(proxyFn(hedefUrl), 6000));
-  try{
-    return await Promise.any(denemeler);
-  }catch(aggErr){
-    throw new Error("Tüm proxy denemeleri başarısız oldu");
+  // proxy'leri SIRAYLA dener (aynı anda değil) — ücretsiz servisleri hız sınırına takmamak için
+  let sonHata = null;
+  for(const proxyFn of METAR_PROXIES){
+    try{
+      return await fetchIleZamanAsimi(proxyFn(hedefUrl), 4500);
+    }catch(err){
+      sonHata = err;
+    }
   }
+  throw sonHata || new Error("Tüm proxy denemeleri başarısız oldu");
+}
+
+function metarSonucCiz(meydan, metarText, tafText){
+  const kural = ucusKuraliBelirle(metarText);
+  const rengi = ucusKuraliRengi(kural);
+
+  const ruzgarM = metarText.match(/(\d{3})(\d{2})(G(\d{2}))?KT/);
+  const sicaklikM = metarText.match(/\s(M?\d{2})\/(M?\d{2})\s/);
+  const basincM = metarText.match(/Q(\d{4})/) || metarText.match(/A(\d{4})/);
+
+  return `
+    <div class="route-label">${meydan.ad} (${meydan.icao})
+      <span class="flight-rule" style="background:${rengi}">${kural}</span>
+    </div>
+    <div class="metar-raw"><b>METAR:</b><br>${metarText}</div>
+    <div class="metar-raw" id="metarTafSlot">${tafText ? "<b>TAF:</b><br>"+tafText : '<i style="color:#7a8a99;">TAF getiriliyor...</i>'}</div>
+    <div class="metar-summary">
+      <div><b>RÜZGAR</b>${ruzgarM ? ruzgarM[1]+"° / "+parseInt(ruzgarM[2])+" kt"+(ruzgarM[4]?(" (gust "+ruzgarM[4]+" kt)"):"") : "—"}</div>
+      <div><b>SICAKLIK</b>${sicaklikM ? sicaklikM[1].replace('M','-')+"°C / "+sicaklikM[2].replace('M','-')+"°C" : "—"}</div>
+      <div><b>BASINÇ</b>${basincM ? basincM[0] : "—"}</div>
+      <div><b>GÜNCELLEME</b>${formatTime(new Date())}</div>
+    </div>
+  `;
 }
 
 async function getirMetarTaf(){
@@ -906,41 +938,32 @@ async function getirMetarTaf(){
     return;
   }
 
-  box.innerHTML = '<div class="result-empty">Getiriliyor... (birden fazla sunucu deneniyor, birkaç saniye sürebilir)</div>';
+  box.innerHTML = '<div class="result-empty">METAR getiriliyor...</div>';
 
   try{
-    const [metarText, tafText] = await Promise.all([
-      proxyIleGetir(`https://aviationweather.gov/api/data/metar?ids=${meydan.icao}&format=raw`),
-      proxyIleGetir(`https://aviationweather.gov/api/data/taf?ids=${meydan.icao}&format=raw`).catch(()=>"")
-    ]);
+    // önce METAR'ı getir ve hemen göster (kullanıcı beklemeden görsün)
+    const metarText = await proxyIleGetir(`https://aviationweather.gov/api/data/metar?ids=${meydan.icao}&format=raw`);
 
     if(!metarText){
       box.innerHTML = `<div class="error-msg">${meydan.ad} (${meydan.icao}) için METAR verisi bulunamadı.</div>`;
       return;
     }
 
-    const kural = ucusKuraliBelirle(metarText);
-    const rengi = ucusKuraliRengi(kural);
+    box.innerHTML = metarSonucCiz(meydan, metarText, null);
 
-    const ruzgarM = metarText.match(/(\d{3})(\d{2})(G(\d{2}))?KT/);
-    const sicaklikM = metarText.match(/\s(M?\d{2})\/(M?\d{2})\s/);
-    const basincM = metarText.match(/Q(\d{4})/) || metarText.match(/A(\d{4})/);
+    // TAF'ı arka planda ayrıca getir, geldiğinde ilgili alanı güncelle (METAR'ı bekletmez)
+    proxyIleGetir(`https://aviationweather.gov/api/data/taf?ids=${meydan.icao}&format=raw`)
+      .then(tafText=>{
+        const slot = document.getElementById('metarTafSlot');
+        if(slot) slot.innerHTML = tafText ? "<b>TAF:</b><br>"+tafText : '<i style="color:#7a8a99;">TAF bulunamadı.</i>';
+      })
+      .catch(()=>{
+        const slot = document.getElementById('metarTafSlot');
+        if(slot) slot.innerHTML = '<i style="color:#7a8a99;">TAF alınamadı.</i>';
+      });
 
-    box.innerHTML = `
-      <div class="route-label">${meydan.ad} (${meydan.icao})
-        <span class="flight-rule" style="background:${rengi}">${kural}</span>
-      </div>
-      <div class="metar-raw"><b>METAR:</b><br>${metarText}</div>
-      ${tafText ? `<div class="metar-raw"><b>TAF:</b><br>${tafText}</div>` : ''}
-      <div class="metar-summary">
-        <div><b>RÜZGAR</b>${ruzgarM ? ruzgarM[1]+"° / "+parseInt(ruzgarM[2])+" kt"+(ruzgarM[4]?(" (gust "+ruzgarM[4]+" kt)"):"") : "—"}</div>
-        <div><b>SICAKLIK</b>${sicaklikM ? sicaklikM[1].replace('M','-')+"°C / "+sicaklikM[2].replace('M','-')+"°C" : "—"}</div>
-        <div><b>BASINÇ</b>${basincM ? basincM[0] : "—"}</div>
-        <div><b>GÜNCELLEME</b>${formatTime(new Date())}</div>
-      </div>
-    `;
   }catch(err){
-    box.innerHTML = '<div class="error-msg">Veri alınamadı — tüm sunucular yanıt vermedi. Lütfen tekrar deneyin veya birkaç saniye bekleyin.</div>';
+    box.innerHTML = '<div class="error-msg">METAR alınamadı — tüm sunucular yanıt vermedi. Lütfen tekrar deneyin.</div>';
   }
 }
 document.getElementById('metarBtn').addEventListener('click', getirMetarTaf);
