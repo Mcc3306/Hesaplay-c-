@@ -26,8 +26,10 @@
   html,body{
     margin:0;
     padding:0;
-    height:100%;
     font-family:'Segoe UI', Roboto, Arial, sans-serif;
+  }
+  html{
+    min-height:100%;
   }
   body{
     background:linear-gradient(180deg,var(--sky-top) 0%, var(--sky-bottom) 100%);
@@ -576,7 +578,7 @@
 
     <div id="tab-metar" class="tab-content">
       <div class="section-title">METAR / TAF SORGULAMA</div>
-      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle birden fazla ücretsiz ara sunucu (proxy) sırayla otomatik denenir; ilk deneme başarısız olursa sistem kendiliğinden bir sonrakine geçer.</div>
+      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle birden fazla ücretsiz ara sunucu (proxy) AYNI ANDA denenir, hangisi önce yanıt verirse o kullanılır.</div>
 
       <div class="field">
         <div class="icon blue">🛰️</div>
@@ -885,16 +887,13 @@ async function fetchIleZamanAsimi(url, ms){
 }
 
 async function proxyIleGetir(hedefUrl){
-  let sonHata = null;
-  for(const proxyFn of METAR_PROXIES){
-    try{
-      return await fetchIleZamanAsimi(proxyFn(hedefUrl), 6000);
-    }catch(err){
-      sonHata = err;
-      // bu proxy başarısız oldu, sıradakini dene
-    }
+  // tüm proxy'leri AYNI ANDA dener, ilk başarılı yanıtı kullanır (en yavaşı beklemez)
+  const denemeler = METAR_PROXIES.map(proxyFn => fetchIleZamanAsimi(proxyFn(hedefUrl), 6000));
+  try{
+    return await Promise.any(denemeler);
+  }catch(aggErr){
+    throw new Error("Tüm proxy denemeleri başarısız oldu");
   }
-  throw sonHata || new Error("Tüm proxy denemeleri başarısız oldu");
 }
 
 async function getirMetarTaf(){
