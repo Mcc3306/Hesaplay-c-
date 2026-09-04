@@ -576,7 +576,7 @@
 
     <div id="tab-metar" class="tab-content">
       <div class="section-title">METAR / TAF SORGULAMA</div>
-      <div class="note-box">Veri aviationweather.gov'dan ücretsiz bir ara sunucu (proxy) üzerinden çekilir; proxy geçici olarak yanıt vermezse tekrar deneyin.</div>
+      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle birden fazla ücretsiz ara sunucu (proxy) sırayla otomatik denenir; ilk deneme başarısız olursa sistem kendiliğinden bir sonrakine geçer.</div>
 
       <div class="field">
         <div class="icon blue">🛰️</div>
@@ -861,6 +861,42 @@ function ucusKuraliBelirle(metarText){
   return 'VFR';
 }
 
+/* birden fazla CORS proxy'sini sırayla dener, her birine zaman aşımı koyar */
+const METAR_PROXIES = [
+  url => "https://corsproxy.io/?url=" + encodeURIComponent(url),
+  url => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
+  url => "https://thingproxy.freeboard.io/fetch/" + url,
+];
+
+async function fetchIleZamanAsimi(url, ms){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), ms);
+  try{
+    const res = await fetch(url, {signal: controller.signal});
+    clearTimeout(timer);
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const text = (await res.text()).trim();
+    if(!text) throw new Error("boş yanıt");
+    return text;
+  }catch(err){
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+async function proxyIleGetir(hedefUrl){
+  let sonHata = null;
+  for(const proxyFn of METAR_PROXIES){
+    try{
+      return await fetchIleZamanAsimi(proxyFn(hedefUrl), 6000);
+    }catch(err){
+      sonHata = err;
+      // bu proxy başarısız oldu, sıradakini dene
+    }
+  }
+  throw sonHata || new Error("Tüm proxy denemeleri başarısız oldu");
+}
+
 async function getirMetarTaf(){
   const girdi = document.getElementById('meydanArama').value;
   const meydan = meydanBul(girdi);
@@ -871,16 +907,13 @@ async function getirMetarTaf(){
     return;
   }
 
-  box.innerHTML = '<div class="result-empty">Getiriliyor...</div>';
+  box.innerHTML = '<div class="result-empty">Getiriliyor... (birden fazla sunucu deneniyor, birkaç saniye sürebilir)</div>';
 
   try{
-    const proxy = "https://api.allorigins.win/raw?url=";
-    const [metarRes, tafRes] = await Promise.all([
-      fetch(proxy + encodeURIComponent(`https://aviationweather.gov/api/data/metar?ids=${meydan.icao}&format=raw`)),
-      fetch(proxy + encodeURIComponent(`https://aviationweather.gov/api/data/taf?ids=${meydan.icao}&format=raw`))
+    const [metarText, tafText] = await Promise.all([
+      proxyIleGetir(`https://aviationweather.gov/api/data/metar?ids=${meydan.icao}&format=raw`),
+      proxyIleGetir(`https://aviationweather.gov/api/data/taf?ids=${meydan.icao}&format=raw`).catch(()=>"")
     ]);
-    const metarText = (await metarRes.text()).trim();
-    const tafText = (await tafRes.text()).trim();
 
     if(!metarText){
       box.innerHTML = `<div class="error-msg">${meydan.ad} (${meydan.icao}) için METAR verisi bulunamadı.</div>`;
@@ -908,7 +941,7 @@ async function getirMetarTaf(){
       </div>
     `;
   }catch(err){
-    box.innerHTML = '<div class="error-msg">Veri alınamadı. İnternet bağlantınızı kontrol edin.</div>';
+    box.innerHTML = '<div class="error-msg">Veri alınamadı — tüm sunucular yanıt vermedi. Lütfen tekrar deneyin veya birkaç saniye bekleyin.</div>';
   }
 }
 document.getElementById('metarBtn').addEventListener('click', getirMetarTaf);
