@@ -584,7 +584,7 @@
 
     <div id="tab-metar" class="tab-content">
       <div class="section-title">METAR / TAF SORGULAMA</div>
-      <div class="note-box">Veri aviationweather.gov'dan çekilir. Tarayıcı güvenlik kısıtlaması nedeniyle ücretsiz bir ara sunucu (proxy) kullanılır; METAR önce gösterilir, TAF arkadan gelir. Yoğunluk anlarında birkaç saniye sürebilir.</div>
+      <div class="note-box">Veri aviationweather.gov'dan, kendi özel proxy sunucumuz üzerinden çekilir (yavaş/başarısız olursa yedek sunuculara otomatik geçer). METAR önce gösterilir, TAF arkadan gelir.</div>
 
       <div class="field">
         <div class="icon blue">🛰️</div>
@@ -871,9 +871,10 @@ function ucusKuraliBelirle(metarText){
 
 /* birden fazla CORS proxy'sini sırayla dener, her birine zaman aşımı koyar */
 const METAR_PROXIES = [
-  url => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url),
-  url => "https://thingproxy.freeboard.io/fetch/" + url,
-  url => "https://corsproxy.io/?url=" + encodeURIComponent(url),
+  url => "https://red-violet-1acd.muratcancakmakci.workers.dev/?url=" + encodeURIComponent(url), // kendi proxy'miz (birincil)
+  url => "https://api.allorigins.win/raw?url=" + encodeURIComponent(url), // yedek
+  url => "https://thingproxy.freeboard.io/fetch/" + url, // yedek
+  url => "https://corsproxy.io/?url=" + encodeURIComponent(url), // yedek
 ];
 
 async function fetchIleZamanAsimi(url, ms){
