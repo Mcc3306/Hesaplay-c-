@@ -609,8 +609,8 @@
 
     <div id="tab-bulut" class="tab-content">
       <div class="section-title">GÜZERGAH BULUT &amp; İRTİFA RÜZGARI</div>
-      <div class="note-box">Tahminî model verisi — 15.000-20.000 ft bandı, 500 hPa ve 600 hPa seviyeleri baz alınarak yaklaşık hesaplanır. Kesin METAR/TAF verisi yerine geçmez.<br><br>
-      <b>Kalkış nasıl girilir?</b> İki yoldan biri: (1) meydan adı yaz, açılır listeden seç — veya (2) doğrudan koordinat yaz. Koordinat formatı <b>ondalık derece (decimal degrees / WGS84)</b>, "enlem,boylam" şeklinde — MGRS, UTM veya derece-dakika-saniye DEĞİL. Örnek: Gaziantep için <code>37.10,37.47</code> (kuzey enlem virgülle ayrılmış doğu boylam). Açılır liste sadece meydan önerisi gösterir, koordinatı serbestçe elle yazabilirsin.</div>
+      <div class="note-box">Tahminî model verisi — girdiğin irtifaya en yakın basınç seviyesi baz alınır. Rüzgar hızı sınırı sabit <b>60 kt</b> olarak uygulanır. Kesin METAR/TAF verisi yerine geçmez.<br><br>
+      <b>Kalkış nasıl girilir?</b> İki yoldan biri: (1) meydan adı yaz, açılır listeden seç — veya (2) doğrudan koordinat yaz. Koordinat formatı <b>ondalık derece (decimal degrees / WGS84)</b>, "enlem,boylam" şeklinde — MGRS, UTM veya derece-dakika-saniye DEĞİL. Örnek: Gaziantep için <code>37.10,37.47</code>. Açılır liste sadece meydan önerisi gösterir, koordinatı serbestçe elle yazabilirsin.</div>
 
       <div class="field">
         <div class="icon green">🛫</div>
@@ -623,6 +623,17 @@
       </div>
       <datalist id="meydanListesi2"></datalist>
 
+      <div class="field">
+        <div class="icon blue">📶</div>
+        <div class="field-body">
+          <label for="ucusIrtifa">Uçuş İrtifası</label>
+          <div class="input-wrap">
+            <input type="number" id="ucusIrtifa" inputmode="decimal" placeholder="18000">
+            <span class="unit">ft</span>
+          </div>
+        </div>
+      </div>
+
       <div class="section-title" style="font-size:15px;margin-top:10px;">ROTA BACAKLARI (açı ° · mesafe NM)</div>
       <div id="bulutLegs"></div>
       <button class="leg-add-btn" id="bulutLegAdd">+ Bacak Ekle</button>
@@ -630,21 +641,32 @@
       <button class="calc-btn" id="bulutBtn">GÜZERGAHI SORGULA</button>
 
       <div class="result-card" id="bulutResult">
-        <div class="result-empty">Kalkış girip en az bir bacak ekleyin.</div>
+        <div class="result-empty">Kalkış, irtifa girip en az bir bacak ekleyin.</div>
       </div>
     </div>
     <!-- /tab-bulut -->
 
     <div id="tab-seyir" class="tab-content">
       <div class="section-title">NE KADAR SÜREDE GİDER?</div>
-      <div class="note-box">Rüzgar (yön/hız) rotanın tamamı için sabit kabul edilir. Her bacağı kendi baş açısı ve mesafesiyle ekleyin — hesap her bacağı ayrı ayrı rüzgara göre düzeltip toplam süreyi verir. Hız <b>knot</b>, mesafe <b>deniz mili (NM)</b>, açılar <b>derece</b> cinsindendir.</div>
+      <div class="note-box">Anlık baş açını ve yer hızını (GS) gir — rüzgarla birlikte bunlardan hava hızın (TAS) hesaplanır, sonra bu TAS her bacağa uygulanır. Hız <b>knot</b>, mesafe <b>deniz mili (NM)</b>, açılar <b>derece</b> cinsindendir. <b>Rüzgar şiddeti güzergah üzerinde değişebilir, sonucu buna göre kontrol edin.</b></div>
 
       <div class="field">
-        <div class="icon green">✈️</div>
+        <div class="icon blue">🧭</div>
         <div class="field-body">
-          <label for="tas">Hava Hızı (TAS)</label>
+          <label for="mevcutHeading">Anlık Baş Açısı</label>
           <div class="input-wrap">
-            <input type="number" id="tas" inputmode="decimal" placeholder="70">
+            <input type="number" id="mevcutHeading" inputmode="decimal" placeholder="090">
+            <span class="unit">°</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="icon green">📡</div>
+        <div class="field-body">
+          <label for="mevcutGS">Anlık Yer Hızı (GS)</label>
+          <div class="input-wrap">
+            <input type="number" id="mevcutGS" inputmode="decimal" placeholder="65">
             <span class="unit">kt</span>
           </div>
         </div>
@@ -1025,12 +1047,31 @@ legRowEkle('bulutLegs');
 legRowEkle('seyirLegs');
 
 /* ========================= GÜZERGAH BULUT & İRTİFA RÜZGARI ========================= */
+/* basınç seviyesi <-> irtifa dönüşümü (ICAO standart atmosfer yaklaşık formülü) */
+const BASINC_SEVIYELERI = [1000,975,950,925,900,850,800,700,600,500,400,300,250,200,150,100,70,50,30,20,10];
+
+function ftDenHpaYe(ft){
+  return 1013.25 * Math.pow(1 - ft/145366.45, 1/0.190284);
+}
+function hpaDenFtYe(hpa){
+  return 145366.45 * (1 - Math.pow(hpa/1013.25, 0.190284));
+}
+function enYakinSeviye(hedefHpa){
+  return BASINC_SEVIYELERI.reduce((prev,curr)=> Math.abs(curr-hedefHpa)<Math.abs(prev-hedefHpa) ? curr : prev);
+}
+
 async function getirBulutRuzgar(){
   const kalkis = meydanBul(document.getElementById('kalkisMeydan').value);
   const box = document.getElementById('bulutResult');
+  const irtifaFt = parseFloat(document.getElementById('ucusIrtifa').value);
+  const ruzgarSinirKt = 60; // sabit rüzgar hızı sınırı
 
   if(!kalkis){
     box.innerHTML = '<div class="error-msg">Lütfen geçerli bir kalkış girin (meydan adı veya "enlem,boylam").</div>';
+    return;
+  }
+  if(isNaN(irtifaFt) || irtifaFt<=0){
+    box.innerHTML = '<div class="error-msg">Lütfen geçerli bir uçuş irtifası (ft) girin.</div>';
     return;
   }
 
@@ -1042,6 +1083,12 @@ async function getirBulutRuzgar(){
 
   box.innerHTML = '<div class="result-empty">Getiriliyor...</div>';
 
+  // irtifaya en yakın basınç seviyesi ve "bir üst" (daha yüksek irtifa) seviyesi
+  const hedefHpa = ftDenHpaYe(irtifaFt);
+  const seviyeSu = enYakinSeviye(hedefHpa);
+  const idx = BASINC_SEVIYELERI.indexOf(seviyeSu);
+  const seviyeUst = idx>0 ? BASINC_SEVIYELERI[idx-1] : seviyeSu; // daha düşük basınç = daha yüksek irtifa
+
   // kalkıştan başlayarak her bacağın bitiş koordinatını (dead-reckoning) üret
   const noktalar = [{lat: kalkis.lat, lon: kalkis.lon, etiket:"KALKIŞ"}];
   let son = {lat: kalkis.lat, lon: kalkis.lon};
@@ -1051,31 +1098,54 @@ async function getirBulutRuzgar(){
   });
 
   try{
+    const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
     const sonuclar = await Promise.all(noktalar.map(async (n) => {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=cloud_cover_500hPa,cloud_cover_600hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_600hPa,wind_direction_600hPa&forecast_days=1&wind_speed_unit=kn`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn`;
       const res = await fetch(url);
       const data = await res.json();
-      const idx = 0; // en yakın saat
+      const idx0 = 0; // en yakın saat
       return {
         nokta: n,
         etiket: n.etiket,
-        bulut500: data.hourly?.cloud_cover_500hPa?.[idx],
-        bulut600: data.hourly?.cloud_cover_600hPa?.[idx],
-        ruzgarHiz500: data.hourly?.wind_speed_500hPa?.[idx],
-        ruzgarYon500: data.hourly?.wind_direction_500hPa?.[idx],
-        ruzgarHiz600: data.hourly?.wind_speed_600hPa?.[idx],
-        ruzgarYon600: data.hourly?.wind_direction_600hPa?.[idx],
+        bulutSu: data.hourly?.[`cloud_cover_${seviyeSu}hPa`]?.[idx0],
+        bulutUst: data.hourly?.[`cloud_cover_${seviyeUst}hPa`]?.[idx0],
+        ruzgarHiz: data.hourly?.[`wind_speed_${seviyeSu}hPa`]?.[idx0],
+        ruzgarYon: data.hourly?.[`wind_direction_${seviyeSu}hPa`]?.[idx0],
       };
     }));
 
-    let html = '<div class="note-box">Yaklaşık 18.000 ft (500 hPa) ve 14.000 ft (600 hPa) seviyeleri — 15-20bin ft bandını temsilen tahminî.</div>';
+    const maxBulutSu = Math.max(...sonuclar.map(s=>s.bulutSu ?? 0));
+    const maxBulutUst = Math.max(...sonuclar.map(s=>s.bulutUst ?? 0));
+    const maxRuzgar = Math.max(...sonuclar.map(s=>s.ruzgarHiz ?? 0));
+
+    const bulutTehlike = maxBulutSu>50 || maxBulutUst>50;
+    const ruzgarTehlike = maxRuzgar>ruzgarSinirKt;
+
+    let html = `<div class="note-box">İrtifa <b>${irtifaFt.toFixed(0)} ft</b> için en yakın seviye: <b>${seviyeSu} hPa</b> (~${hpaDenFtYe(seviyeSu).toFixed(0)} ft) · bir üst seviye kontrolü: <b>${seviyeUst} hPa</b> (~${hpaDenFtYe(seviyeUst).toFixed(0)} ft).</div>`;
+
+    if(bulutTehlike || ruzgarTehlike){
+      html += `<div class="error-msg" style="margin-bottom:12px;">`;
+      if(bulutTehlike) html += `⚠️ Rota üzerinde girdiğin irtifada veya üzerinde <b>%${Math.round(Math.max(maxBulutSu,maxBulutUst))}</b> bulut riski var.<br>`;
+      if(ruzgarTehlike) html += `⚠️ Rota üzerinde rüzgar hızı <b>${Math.round(maxRuzgar)} kt</b>'e ulaşıyor — senin sınırın (${ruzgarSinirKt} kt) aşılıyor.`;
+      html += `</div>`;
+    }else{
+      html += `<div class="note-box" style="background:rgba(46,139,61,0.12);border-color:rgba(46,139,61,0.35);color:#1f5c2b;">✅ Rota boyunca girdiğin irtifada bulut ve rüzgar sınırların içinde görünüyor (tahminî).</div>`;
+    }
+
+    html += `<div class="metar-summary" style="margin-bottom:12px;">
+      <div><b>MAKS BULUT (senin irtifan)</b>%${Math.round(maxBulutSu)}</div>
+      <div><b>MAKS BULUT (bir üst seviye)</b>%${Math.round(maxBulutUst)}</div>
+      <div><b>MAKS RÜZGAR</b>${Math.round(maxRuzgar)} kt</div>
+      <div><b>RÜZGAR SINIRI</b>${ruzgarSinirKt} kt</div>
+    </div>`;
+
     sonuclar.forEach(s=>{
       html += `
         <div class="waypoint-row">
           <div class="wp-name">${s.etiket}<br><span style="font-weight:400;font-size:10.5px;color:#5a7893;">${s.nokta.lat.toFixed(2)}, ${s.nokta.lon.toFixed(2)}</span></div>
           <div class="wp-data">
-            ~18.000ft: bulut %${s.bulut500 ?? '—'} · rüzgar ${s.ruzgarYon500 ?? '—'}°/${s.ruzgarHiz500 ? Math.round(s.ruzgarHiz500) : '—'}kt<br>
-            ~14.000ft: bulut %${s.bulut600 ?? '—'} · rüzgar ${s.ruzgarYon600 ?? '—'}°/${s.ruzgarHiz600 ? Math.round(s.ruzgarHiz600) : '—'}kt
+            İrtifanda: bulut %${s.bulutSu ?? '—'} · rüzgar ${s.ruzgarYon ?? '—'}°/${s.ruzgarHiz ? Math.round(s.ruzgarHiz) : '—'}kt<br>
+            Bir üst seviyede: bulut %${s.bulutUst ?? '—'}
           </div>
         </div>
       `;
@@ -1089,13 +1159,29 @@ document.getElementById('bulutBtn').addEventListener('click', getirBulutRuzgar);
 
 /* ========================= RÜZGAR DÜZELTMELİ SEYİR (ÇOK BACAKLI) ========================= */
 function hesaplaSeyir(){
-  const tas = parseFloat(document.getElementById('tas').value);
+  const hdgNow = parseFloat(document.getElementById('mevcutHeading').value);
+  const gsNow = parseFloat(document.getElementById('mevcutGS').value);
   const wDir = parseFloat(document.getElementById('ruzgarYon').value);
   const wSpd = parseFloat(document.getElementById('ruzgarHiz').value);
   const box = document.getElementById('seyirResult');
 
-  if([tas,wDir,wSpd].some(v=>isNaN(v)) || tas<=0){
-    box.innerHTML = '<div class="error-msg">Lütfen hava hızı ve rüzgar bilgilerini geçerli sayılarla doldurun.</div>';
+  if([hdgNow,gsNow,wDir,wSpd].some(v=>isNaN(v)) || gsNow<=0){
+    box.innerHTML = '<div class="error-msg">Lütfen anlık baş açısı, yer hızı ve rüzgar bilgilerini geçerli sayılarla doldurun.</div>';
+    return;
+  }
+
+  // vektörel türetme: yer hızı vektörü - rüzgar vektörü = hava hızı (TAS) vektörü
+  const gsN = gsNow * Math.cos(toRad(hdgNow));
+  const gsE = gsNow * Math.sin(toRad(hdgNow));
+  const wN = -wSpd * Math.cos(toRad(wDir)); // rüzgar wDir'DEN esip ters yöne doğru gider
+  const wE = -wSpd * Math.sin(toRad(wDir));
+  const tasN = gsN - wN;
+  const tasE = gsE - wE;
+  const tas = Math.sqrt(tasN*tasN + tasE*tasE);
+  const tasHeading = norm360(toDeg(Math.atan2(tasE, tasN)));
+
+  if(tas <= 0 || isNaN(tas)){
+    box.innerHTML = '<div class="error-msg">Girilen değerlerden hava hızı (TAS) hesaplanamadı, lütfen değerleri kontrol edin.</div>';
     return;
   }
 
@@ -1146,7 +1232,7 @@ function hesaplaSeyir(){
   const now = new Date();
   const eta = new Date(now.getTime() + toplamDakika*60000);
 
-  let html = '';
+  let html = `<div class="note-box">Türetilen hava hızı (TAS): <b>${tas.toFixed(1)} kt</b> (yaklaşık uçuş yönü ${tasHeading.toFixed(0)}°) — anlık baş açısı, yer hızı ve rüzgardan hesaplandı.</div>`;
   satirlar.forEach(s=>{
     html += `
       <div class="waypoint-row">
@@ -1167,6 +1253,7 @@ function hesaplaSeyir(){
       <div class="eta-label">TAHMİNİ VARIŞ (ETA)</div>
       <div class="eta-value">${formatTime(eta)}</div>
     </div>
+    <div class="note-box" style="margin-top:14px;margin-bottom:0;">⚠️ Rüzgar şiddeti ve yönü güzergah üzerinde (irtifa/bölgeye göre) değişebilir. Bu hesap tek bir sabit rüzgar değerine dayanır — sonucu Güzergah Bulut &amp; Rüzgar sekmesiyle karşılaştırıp kontrol edin.</div>
   `;
   box.innerHTML = html;
 }
