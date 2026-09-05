@@ -1083,11 +1083,12 @@ async function getirBulutRuzgar(){
 
   box.innerHTML = '<div class="result-empty">Getiriliyor...</div>';
 
-  // irtifaya en yakın basınç seviyesi ve "bir üst" (daha yüksek irtifa) seviyesi
+  // irtifaya en yakın basınç seviyesi + bir üst (yüksek irtifa) + bir alt (düşük irtifa) seviye
   const hedefHpa = ftDenHpaYe(irtifaFt);
   const seviyeSu = enYakinSeviye(hedefHpa);
   const idx = BASINC_SEVIYELERI.indexOf(seviyeSu);
   const seviyeUst = idx>0 ? BASINC_SEVIYELERI[idx-1] : seviyeSu; // daha düşük basınç = daha yüksek irtifa
+  const seviyeAlt = idx<BASINC_SEVIYELERI.length-1 ? BASINC_SEVIYELERI[idx+1] : seviyeSu; // daha yüksek basınç = daha düşük irtifa
 
   // kalkıştan başlayarak her bacağın bitiş koordinatını (dead-reckoning) üret
   const noktalar = [{lat: kalkis.lat, lon: kalkis.lon, etiket:"KALKIŞ"}];
@@ -1098,7 +1099,7 @@ async function getirBulutRuzgar(){
   });
 
   try{
-    const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
+    const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,cloud_cover_${seviyeAlt}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
     const sonuclar = await Promise.all(noktalar.map(async (n) => {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn`;
       const res = await fetch(url);
@@ -1109,6 +1110,7 @@ async function getirBulutRuzgar(){
         etiket: n.etiket,
         bulutSu: data.hourly?.[`cloud_cover_${seviyeSu}hPa`]?.[idx0],
         bulutUst: data.hourly?.[`cloud_cover_${seviyeUst}hPa`]?.[idx0],
+        bulutAlt: data.hourly?.[`cloud_cover_${seviyeAlt}hPa`]?.[idx0],
         ruzgarHiz: data.hourly?.[`wind_speed_${seviyeSu}hPa`]?.[idx0],
         ruzgarYon: data.hourly?.[`wind_direction_${seviyeSu}hPa`]?.[idx0],
       };
@@ -1116,27 +1118,35 @@ async function getirBulutRuzgar(){
 
     const maxBulutSu = Math.max(...sonuclar.map(s=>s.bulutSu ?? 0));
     const maxBulutUst = Math.max(...sonuclar.map(s=>s.bulutUst ?? 0));
+    const maxBulutAlt = Math.max(...sonuclar.map(s=>s.bulutAlt ?? 0));
     const maxRuzgar = Math.max(...sonuclar.map(s=>s.ruzgarHiz ?? 0));
 
-    const bulutTehlike = maxBulutSu>50 || maxBulutUst>50;
+    const suTehlike = maxBulutSu>50, ustTehlike = maxBulutUst>50, altTehlike = maxBulutAlt>50;
+    const bulutTehlike = suTehlike || ustTehlike || altTehlike;
     const ruzgarTehlike = maxRuzgar>ruzgarSinirKt;
 
-    let html = `<div class="note-box">İrtifa <b>${irtifaFt.toFixed(0)} ft</b> için en yakın seviye: <b>${seviyeSu} hPa</b> (~${hpaDenFtYe(seviyeSu).toFixed(0)} ft) · bir üst seviye kontrolü: <b>${seviyeUst} hPa</b> (~${hpaDenFtYe(seviyeUst).toFixed(0)} ft).</div>`;
+    let html = '';
 
     if(bulutTehlike || ruzgarTehlike){
       html += `<div class="error-msg" style="margin-bottom:12px;">`;
-      if(bulutTehlike) html += `⚠️ Rota üzerinde girdiğin irtifada veya üzerinde <b>%${Math.round(Math.max(maxBulutSu,maxBulutUst))}</b> bulut riski var.<br>`;
-      if(ruzgarTehlike) html += `⚠️ Rota üzerinde rüzgar hızı <b>${Math.round(maxRuzgar)} kt</b>'e ulaşıyor — senin sınırın (${ruzgarSinirKt} kt) aşılıyor.`;
+      if(bulutTehlike){
+        const yerler = [];
+        if(suTehlike) yerler.push("irtifanda");
+        if(ustTehlike) yerler.push("üstünde");
+        if(altTehlike) yerler.push("altında");
+        html += `⚠️ Rota üzerinde ${yerler.join(", ")} bulut mevcut.<br>`;
+      }
+      if(ruzgarTehlike) html += `⚠️ Rota üzerinde rüzgar hızı <b>${Math.round(maxRuzgar)} kt</b>'e ulaşıyor — sınır (${ruzgarSinirKt} kt) aşılıyor.`;
       html += `</div>`;
     }else{
       html += `<div class="note-box" style="background:rgba(46,139,61,0.12);border-color:rgba(46,139,61,0.35);color:#1f5c2b;">✅ Rota boyunca girdiğin irtifada bulut ve rüzgar sınırların içinde görünüyor (tahminî).</div>`;
     }
 
     html += `<div class="metar-summary" style="margin-bottom:12px;">
-      <div><b>MAKS BULUT (senin irtifan)</b>%${Math.round(maxBulutSu)}</div>
-      <div><b>MAKS BULUT (bir üst seviye)</b>%${Math.round(maxBulutUst)}</div>
+      <div><b>MAKS BULUT (irtifan)</b>%${Math.round(maxBulutSu)}</div>
+      <div><b>MAKS BULUT (üstünde)</b>%${Math.round(maxBulutUst)}</div>
+      <div><b>MAKS BULUT (altında)</b>%${Math.round(maxBulutAlt)}</div>
       <div><b>MAKS RÜZGAR</b>${Math.round(maxRuzgar)} kt</div>
-      <div><b>RÜZGAR SINIRI</b>${ruzgarSinirKt} kt</div>
     </div>`;
 
     sonuclar.forEach(s=>{
@@ -1145,7 +1155,7 @@ async function getirBulutRuzgar(){
           <div class="wp-name">${s.etiket}<br><span style="font-weight:400;font-size:10.5px;color:#5a7893;">${s.nokta.lat.toFixed(2)}, ${s.nokta.lon.toFixed(2)}</span></div>
           <div class="wp-data">
             İrtifanda: bulut %${s.bulutSu ?? '—'} · rüzgar ${s.ruzgarYon ?? '—'}°/${s.ruzgarHiz ? Math.round(s.ruzgarHiz) : '—'}kt<br>
-            Bir üst seviyede: bulut %${s.bulutUst ?? '—'}
+            Üstünde: %${s.bulutUst ?? '—'} · Altında: %${s.bulutAlt ?? '—'}
           </div>
         </div>
       `;
