@@ -891,6 +891,53 @@ function ucusKuraliBelirle(metarText){
   return 'VFR';
 }
 
+/* METAR/TAF metnindeki olumsuz unsurları tespit edip kırmızı vurgular, uyarı listesi döner */
+const OLUMSUZ_DESENLER = [
+  {re:/\bTS\w*/g, label:"Gök gürültülü fırtına (TS)"},
+  {re:/\bFZ\w*/g, label:"Donan yağış (FZ)"},
+  {re:/\bFG\b/g, label:"Sis (FG)"},
+  {re:/\bBR\b/g, label:"Puslu hava (BR)"},
+  {re:/\bSN\w*/g, label:"Kar yağışı (SN)"},
+  {re:/\bGR\w*/g, label:"Dolu (GR)"},
+  {re:/\bSQ\b/g, label:"Fırtına/Squall (SQ)"},
+  {re:/\bFC\b/g, label:"Hortum/huni bulut (FC)"},
+  {re:/\b(DS|SS)\b/g, label:"Toz/kum fırtınası"},
+  {re:/\bVA\b/g, label:"Volkanik kül (VA)"},
+  {re:/\bBKN\d{3}\w*/g, label:"Parçalı bulutlu (BKN)"},
+  {re:/\bOVC\d{3}\w*/g, label:"Kapalı bulut (OVC)"},
+  {re:/\d{3}\d{2}G\d{2,3}KT/g, label:"Rüzgar hamlesi (Gust)"},
+];
+
+function metarVurgulaVeUyar(text){
+  if(!text) return {vurgulanan:"", uyarilar:[]};
+  let vurgulanan = text;
+  const uyarilar = [];
+
+  OLUMSUZ_DESENLER.forEach(d=>{
+    d.re.lastIndex = 0;
+    if(d.re.test(text)) uyarilar.push(d.label);
+    d.re.lastIndex = 0;
+    vurgulanan = vurgulanan.replace(d.re, m => `<span style="color:#c0392b;font-weight:800;">${m}</span>`);
+  });
+
+  // düşük görüş mesafesi (metre cinsinden 4 haneli grup, 5000m altı ve 9999 hariç)
+  const gorusM = text.match(/\s(\d{4})\s/);
+  if(gorusM){
+    const gorus = parseInt(gorusM[1]);
+    if(gorus < 5000 && gorus !== 9999){
+      uyarilar.push(`Düşük görüş mesafesi (${gorus}m)`);
+      vurgulanan = vurgulanan.replace(gorusM[1], `<span style="color:#c0392b;font-weight:800;">${gorusM[1]}</span>`);
+    }
+  }
+
+  return {vurgulanan, uyarilar: [...new Set(uyarilar)]};
+}
+
+function uyariListesiHtml(uyarilar){
+  if(!uyarilar || uyarilar.length===0) return '';
+  return `<div style="color:#c0392b;font-weight:700;font-size:12px;margin:4px 0 10px;">⚠️ ${uyarilar.join(' · ')}</div>`;
+}
+
 /* birden fazla CORS proxy'sini sırayla dener, her birine zaman aşımı koyar */
 const METAR_PROXIES = [
   url => "https://red-violet-1acd.muratcancakmakci.workers.dev/?url=" + encodeURIComponent(url), // kendi proxy'miz (birincil)
@@ -936,12 +983,17 @@ function metarSonucCiz(meydan, metarText, tafText){
   const sicaklikM = metarText.match(/\s(M?\d{2})\/(M?\d{2})\s/);
   const basincM = metarText.match(/Q(\d{4})/) || metarText.match(/A(\d{4})/);
 
+  const metarVurgu = metarVurgulaVeUyar(metarText);
+  const tafVurgu = tafText ? metarVurgulaVeUyar(tafText) : null;
+
   return `
     <div class="route-label">${meydan.ad} (${meydan.icao})
       <span class="flight-rule" style="background:${rengi}">${kural}</span>
     </div>
-    <div class="metar-raw"><b>METAR:</b><br>${metarText}</div>
-    <div class="metar-raw" id="metarTafSlot">${tafText ? "<b>TAF:</b><br>"+tafText : '<i style="color:#7a8a99;">TAF getiriliyor...</i>'}</div>
+    <div class="metar-raw"><b>METAR:</b><br>${metarVurgu.vurgulanan}</div>
+    ${uyariListesiHtml(metarVurgu.uyarilar)}
+    <div class="metar-raw" id="metarTafSlot">${tafText ? "<b>TAF:</b><br>"+tafVurgu.vurgulanan : '<i style="color:#7a8a99;">TAF getiriliyor...</i>'}</div>
+    <div id="tafUyariSlot">${tafText ? uyariListesiHtml(tafVurgu.uyarilar) : ''}</div>
     <div class="metar-summary">
       <div><b>RÜZGAR</b>${ruzgarM ? ruzgarM[1]+"° / "+parseInt(ruzgarM[2])+" kt"+(ruzgarM[4]?(" (gust "+ruzgarM[4]+" kt)"):"") : "—"}</div>
       <div><b>SICAKLIK</b>${sicaklikM ? sicaklikM[1].replace('M','-')+"°C / "+sicaklikM[2].replace('M','-')+"°C" : "—"}</div>
@@ -978,7 +1030,14 @@ async function getirMetarTaf(){
     proxyIleGetir(`https://aviationweather.gov/api/data/taf?ids=${meydan.icao}&format=raw`)
       .then(tafText=>{
         const slot = document.getElementById('metarTafSlot');
-        if(slot) slot.innerHTML = tafText ? "<b>TAF:</b><br>"+tafText : '<i style="color:#7a8a99;">TAF bulunamadı.</i>';
+        const uyariSlot = document.getElementById('tafUyariSlot');
+        if(tafText){
+          const tafVurgu = metarVurgulaVeUyar(tafText);
+          if(slot) slot.innerHTML = "<b>TAF:</b><br>"+tafVurgu.vurgulanan;
+          if(uyariSlot) uyariSlot.innerHTML = uyariListesiHtml(tafVurgu.uyarilar);
+        }else{
+          if(slot) slot.innerHTML = '<i style="color:#7a8a99;">TAF bulunamadı.</i>';
+        }
       })
       .catch(()=>{
         const slot = document.getElementById('metarTafSlot');
