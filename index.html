@@ -1122,25 +1122,25 @@ async function getirBulutRuzgar(){
     const maxRuzgar = Math.max(...sonuclar.map(s=>s.ruzgarHiz ?? 0));
 
     const suTehlike = maxBulutSu>50, ustTehlike = maxBulutUst>50, altTehlike = maxBulutAlt>50;
-    const bulutTehlike = suTehlike || ustTehlike || altTehlike;
     const ruzgarTehlike = maxRuzgar>ruzgarSinirKt;
 
-    let html = '';
-
-    if(bulutTehlike || ruzgarTehlike){
-      html += `<div class="error-msg" style="margin-bottom:12px;">`;
-      if(bulutTehlike){
-        const yerler = [];
-        if(suTehlike) yerler.push("irtifanda");
-        if(ustTehlike) yerler.push("üstünde");
-        if(altTehlike) yerler.push("altında");
-        html += `⚠️ Rota üzerinde ${yerler.join(", ")} bulut mevcut.<br>`;
+    function seviyeSatiri(etiket, tehlikeVar, yuzde){
+      if(tehlikeVar){
+        return `<div style="color:#c0392b;font-weight:800;">⚠️ ${etiket}: bulut VAR (%${Math.round(yuzde)})</div>`;
       }
-      if(ruzgarTehlike) html += `⚠️ Rota üzerinde rüzgar hızı <b>${Math.round(maxRuzgar)} kt</b>'e ulaşıyor — sınır (${ruzgarSinirKt} kt) aşılıyor.`;
-      html += `</div>`;
-    }else{
-      html += `<div class="note-box" style="background:rgba(46,139,61,0.12);border-color:rgba(46,139,61,0.35);color:#1f5c2b;">✅ Rota boyunca girdiğin irtifada bulut ve rüzgar sınırların içinde görünüyor (tahminî).</div>`;
+      return `<div style="color:#1f5c2b;font-weight:700;">✅ ${etiket}: bulut yok (%${Math.round(yuzde)})</div>`;
     }
+
+    let html = '<div class="note-box" style="line-height:1.8;">';
+    html += seviyeSatiri("İrtifanızda", suTehlike, maxBulutSu);
+    html += seviyeSatiri("İrtifa üzerinde", ustTehlike, maxBulutUst);
+    html += seviyeSatiri("İrtifa altında", altTehlike, maxBulutAlt);
+    if(ruzgarTehlike){
+      html += `<div style="color:#c0392b;font-weight:800;">⚠️ Rüzgar: sınırı aşıyor (${Math.round(maxRuzgar)} kt / sınır ${ruzgarSinirKt} kt)</div>`;
+    }else{
+      html += `<div style="color:#1f5c2b;font-weight:700;">✅ Rüzgar: sınır içinde (${Math.round(maxRuzgar)} kt / sınır ${ruzgarSinirKt} kt)</div>`;
+    }
+    html += '</div>';
 
     html += `<div class="metar-summary" style="margin-bottom:12px;">
       <div><b>MAKS BULUT (irtifan)</b>%${Math.round(maxBulutSu)}</div>
