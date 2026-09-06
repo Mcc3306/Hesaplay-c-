@@ -622,6 +622,7 @@
         </div>
       </div>
       <datalist id="meydanListesi2"></datalist>
+      <div class="quick-picks" id="quickPicksBulut"></div>
 
       <div class="field">
         <div class="icon blue">📶</div>
@@ -836,19 +837,38 @@ document.querySelectorAll('#meydanListesi, #meydanListesi2').forEach(dl=>{
   });
 });
 
-// hızlı seçim butonları (METAR sekmesi)
-const SIK_KULLANILAN = ["LTAJ","LTCP","LTCI","LTCJ","LTCW","LTCV","LTCT","LTBJ","LTFD","LTBU","LCEN","LTFC"];
-const quickPicksEl = document.getElementById('quickPicks');
-SIK_KULLANILAN.forEach(icao=>{
-  const m = MEYDANLAR.find(x=>x.icao===icao);
-  if(!m) return;
-  const b = document.createElement('button');
-  b.textContent = m.icao;
-  b.addEventListener('click', ()=>{
-    document.getElementById('meydanArama').value = m.ad + " (" + m.icao + ")";
+// hızlı seçim butonları (şehir ismiyle) — METAR ve Bulut&Rüzgar sekmelerinde ortak kullanılır
+const SIK_KULLANILAN = [
+  {ad:"Çorlu", icao:"LTBU"},
+  {ad:"Edremit", icao:"LTFD"},
+  {ad:"Gaziemir", icao:"LTBJ"},
+  {ad:"Gaziantep", icao:"LTAJ"},
+  {ad:"Urfa", icao:"LTCP"},
+  {ad:"Isparta", icao:"LTFC"},
+  {ad:"Batman", icao:"LTCJ"},
+  {ad:"Cizre", icao:"LTCV"},
+  {ad:"Yüksekova", icao:"LTCW"},
+  {ad:"Van", icao:"LTCI"},
+  {ad:"Iğdır", icao:"LTCT"},
+];
+
+function hizliSecimOlustur(containerId, inputId){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  SIK_KULLANILAN.forEach(item=>{
+    const m = MEYDANLAR.find(x=>x.icao===item.icao);
+    if(!m) return;
+    const b = document.createElement('button');
+    b.textContent = item.ad;
+    b.addEventListener('click', ()=>{
+      document.getElementById(inputId).value = m.ad + " (" + m.icao + ")";
+    });
+    container.appendChild(b);
   });
-  quickPicksEl.appendChild(b);
-});
+}
+
+hizliSecimOlustur('quickPicks', 'meydanArama');
+hizliSecimOlustur('quickPicksBulut', 'kalkisMeydan');
 
 function meydanBul(girdi){
   if(!girdi) return null;
