@@ -249,6 +249,74 @@
   }
   .waypoint-row .wp-name{ font-weight:800; color:var(--navy-dark); }
   .waypoint-row .wp-data{ text-align:right; color:#3a556e; font-size:11.5px; line-height:1.4; }
+  .contact-card{
+    position:relative;
+    background:var(--panel-bg);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:12px 76px 12px 16px;
+    margin-bottom:10px;
+    box-shadow:0 2px 5px rgba(8,36,61,0.08);
+  }
+  .contact-card .contact-ad{
+    font-size:14px;
+    font-weight:800;
+    color:var(--navy-dark);
+    margin-bottom:5px;
+    letter-spacing:0.2px;
+  }
+  .contact-card .contact-no{
+    font-size:20px;
+    font-weight:800;
+    color:#0e5c8f;
+    letter-spacing:0.5px;
+    user-select:all;
+  }
+  .contact-card .contact-sil{
+    position:absolute;
+    top:8px;
+    right:8px;
+    width:26px;
+    height:26px;
+    border:none;
+    border-radius:7px;
+    background:rgba(192,57,43,0.15);
+    color:#c0392b;
+    font-weight:800;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .contact-empty{
+    text-align:center;
+    color:#5a7893;
+    font-size:13px;
+    font-style:italic;
+    padding:30px 10px;
+  }
+  .kat-btn{
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    border:1px solid var(--panel-border);
+    background:var(--panel-bg);
+    color:var(--navy-dark);
+    font-weight:700;
+    font-size:12.5px;
+    padding:9px 14px;
+    border-radius:10px;
+    cursor:pointer;
+  }
+  .kat-btn.active{
+    background:linear-gradient(180deg,var(--btn-top) 0%, var(--btn-bottom) 100%);
+    border-color:var(--accent-blue);
+    color:#06304f;
+  }
+  .kat-btn .kat-sil{
+    color:#c0392b;
+    font-weight:900;
+    margin-left:2px;
+  }
   .leg-row{
     display:flex;
     align-items:center;
@@ -532,6 +600,10 @@
       <span class="tab-emoji">🧭</span>
       <span>Ne Kadar Sürede<br>Gider?</span>
     </button>
+    <button class="tab-btn" data-tab="rehber">
+      <span class="tab-emoji">📞</span>
+      <span>Telefon<br>Rehberi</span>
+    </button>
   </div>
 
   <div class="landing" id="landing">Yukarıdan bir modül seçin.</div>
@@ -706,6 +778,40 @@
       </div>
     </div>
     <!-- /tab-seyir -->
+
+    <div id="tab-rehber" class="tab-content">
+      <div class="section-title">TELEFON REHBERİ</div>
+      <div class="note-box">Sadece meydan, kule, radar ve yaklaşma numaraları. Kendi kategorini ekleyebilir, istediğin ismi/numarayı manuel girebilirsin — girdiklerin sadece bu cihazda saklanır.</div>
+
+      <div class="tab-menu" id="rehberKatMenu" style="grid-template-columns:none;display:flex;overflow-x:auto;gap:8px;padding:0 0 14px;"></div>
+
+      <div id="rehberIcerik"></div>
+
+      <div id="rehberEkleForm" style="display:none;">
+        <div class="leg-row">
+          <div class="leg-field">
+            <label>Başlık (isim)</label>
+            <input type="text" id="rehberYeniAd" placeholder="Örn: Çorlu Kule">
+          </div>
+          <div class="leg-field">
+            <label>Numara</label>
+            <input type="text" id="rehberYeniNo" placeholder="Örn: 0282 xxx xx xx">
+          </div>
+        </div>
+        <button class="calc-btn" id="rehberKaydetBtn" style="margin-top:0;">KAYDET</button>
+      </div>
+      <button class="leg-add-btn" id="rehberEkleToggle">+ Numara Ekle</button>
+
+      <div class="section-title" style="font-size:14px;margin-top:22px;">Yeni Kategori</div>
+      <div class="leg-row">
+        <div class="leg-field">
+          <label>Kategori Adı</label>
+          <input type="text" id="rehberYeniKategori" placeholder="Örn: Diğer">
+        </div>
+        <button class="leg-remove" id="rehberKategoriEkleBtn" style="width:auto;padding:0 14px;">Ekle</button>
+      </div>
+    </div>
+    <!-- /tab-rehber -->
 
   </main>
 
@@ -1180,7 +1286,7 @@ async function getirBulutRuzgar(){
   try{
     const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,cloud_cover_${seviyeAlt}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
     const sonuclar = await Promise.all(noktalar.map(async (n) => {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn&models=icon_eu`;
       const res = await fetch(url);
       const data = await res.json();
       const idx0 = 0; // en yakın saat
@@ -1348,6 +1454,187 @@ function hesaplaSeyir(){
 }
 document.getElementById('seyirBtn').addEventListener('click', hesaplaSeyir);
 
+
+/* ========================= TELEFON REHBERİ (yalnızca meydan/kule/radar/yaklaşma) ========================= */
+const REHBER_DEPO_ANAHTARI = "tb2cakisi_rehber_v2";
+
+const REHBER_VARSAYILAN = {
+  kategoriler: [
+    {
+      id: "meydanlar",
+      ad: "Meydanlar (Kule)",
+      sabit: true,
+      kayitlar: [
+        {ad:"EDREMİT KULE", no:"0266 376 1302-1422-1021"},
+        {ad:"KEŞAN KULE", no:"8113 1004"},
+        {ad:"GAZİANTEP KULE", no:"0342 582 11 11 (dahili 1059)"},
+        {ad:"ŞANLIURFA (GAP) KULE", no:"0414 378 11 11 (dahili 1013)"},
+        {ad:"BATMAN KULE", no:"9 264 5212"},
+        {ad:"CİZRE (ŞIRNAK) KULE", no:"0486 636 77 00"},
+        {ad:"YÜKSEKOVA (HAKKARİ) KULE", no:"0438 300 33 33 (dahili 1020)"},
+        {ad:"VAN KULE", no:"0432 227 00 01"},
+      ]
+    },
+    {
+      id: "radar",
+      ad: "Radar",
+      sabit: true,
+      kayitlar: [
+        {ad:"KALE RADAR", no:"429 4066"},
+        {ad:"YAVUZ RADAR", no:"9-391 1280"},
+        {ad:"EFE RADAR", no:"9-426 4404"},
+      ]
+    },
+    {
+      id: "yaklasma",
+      ad: "Yaklaşma",
+      sabit: true,
+      kayitlar: [
+        {ad:"MENDERES YAKLAŞMA", no:"0232 274 2626-1492"},
+        {ad:"MİLAS YAKLAŞMA", no:"9-451 4021 / 0252 523 0101-1941"},
+        {ad:"İSTANBUL YAKLAŞMA", no:"0212 463 77 77/1-4255"},
+        {ad:"DİYARBAKIR YAKLAŞMA (RAPCON)", no:"9 268 3064"},
+        {ad:"İNCİRLİK YAKLAŞMA (RAPCON)", no:"9 214 4243 / 4267"},
+        {ad:"ESENBOĞA FIR", no:"0312 590 55 04"},
+      ]
+    }
+  ],
+  aktifKategori: "meydanlar"
+};
+
+function rehberOku(){
+  try{
+    const ham = localStorage.getItem(REHBER_DEPO_ANAHTARI);
+    if(!ham) return JSON.parse(JSON.stringify(REHBER_VARSAYILAN));
+    const veri = JSON.parse(ham);
+    if(!veri.kategoriler || veri.kategoriler.length===0) return JSON.parse(JSON.stringify(REHBER_VARSAYILAN));
+    return veri;
+  }catch(e){
+    return JSON.parse(JSON.stringify(REHBER_VARSAYILAN));
+  }
+}
+
+function rehberYaz(veri){
+  try{ localStorage.setItem(REHBER_DEPO_ANAHTARI, JSON.stringify(veri)); }catch(e){ /* depolama yoksa sessiz geç */ }
+}
+
+let rehberVeri = rehberOku();
+
+function rehberKatMenuCiz(){
+  const menu = document.getElementById('rehberKatMenu');
+  menu.innerHTML = '';
+  rehberVeri.kategoriler.forEach(kat=>{
+    const b = document.createElement('button');
+    b.className = 'kat-btn' + (kat.id===rehberVeri.aktifKategori ? ' active' : '');
+    b.innerHTML = kat.ad + (kat.sabit ? '' : ' <span class="kat-sil" data-kat-sil="'+kat.id+'">✕</span>');
+    b.addEventListener('click', (e)=>{
+      if(e.target.dataset.katSil){
+        e.stopPropagation();
+        if(confirm('"'+kat.ad+'" kategorisini ve içindeki tüm numaraları silmek istediğine emin misin?')){
+          rehberVeri.kategoriler = rehberVeri.kategoriler.filter(k=>k.id!==kat.id);
+          if(rehberVeri.aktifKategori===kat.id) rehberVeri.aktifKategori = rehberVeri.kategoriler[0].id;
+          rehberYaz(rehberVeri);
+          rehberTamCiz();
+        }
+        return;
+      }
+      rehberVeri.aktifKategori = kat.id;
+      rehberYaz(rehberVeri);
+      rehberTamCiz();
+    });
+    menu.appendChild(b);
+  });
+}
+
+function rehberIcerikCiz(){
+  const container = document.getElementById('rehberIcerik');
+  const kat = rehberVeri.kategoriler.find(k=>k.id===rehberVeri.aktifKategori) || rehberVeri.kategoriler[0];
+  if(!kat || !kat.kayitlar || kat.kayitlar.length===0){
+    container.innerHTML = '<div class="contact-empty">Bu kategoride henüz numara yok. Aşağıdan ekleyebilirsin.</div>';
+    return;
+  }
+  container.innerHTML = kat.kayitlar.map((k,i)=>`
+    <div class="contact-card" id="kart-${i}">
+      <button class="contact-sil" data-sil-index="${i}" style="right:8px;">✕</button>
+      <button class="contact-sil" data-duzenle-index="${i}" style="right:40px;background:rgba(31,127,193,0.15);color:#1f7fc1;">✏️</button>
+      <div class="contact-ad">${k.ad}</div>
+      <div class="contact-no">${k.no}</div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-sil-index]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.silIndex);
+      if(confirm('Bu numarayı silmek istediğine emin misin?')){
+        kat.kayitlar.splice(idx,1);
+        rehberYaz(rehberVeri);
+        rehberTamCiz();
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-duzenle-index]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.duzenleIndex);
+      const kayit = kat.kayitlar[idx];
+      const kart = document.getElementById('kart-'+idx);
+      kart.innerHTML = `
+        <div class="leg-field" style="margin-bottom:8px;">
+          <label>Başlık</label>
+          <input type="text" class="duzenle-ad" value="${kayit.ad.replace(/"/g,'&quot;')}">
+        </div>
+        <div class="leg-field" style="margin-bottom:8px;">
+          <label>Numara</label>
+          <input type="text" class="duzenle-no" value="${kayit.no.replace(/"/g,'&quot;')}">
+        </div>
+        <button class="calc-btn" style="margin:0;padding:10px;font-size:13px;" id="duzenle-kaydet-${idx}">KAYDET</button>
+      `;
+      document.getElementById('duzenle-kaydet-'+idx).addEventListener('click', ()=>{
+        const yeniAd = kart.querySelector('.duzenle-ad').value.trim();
+        const yeniNo = kart.querySelector('.duzenle-no').value.trim();
+        if(!yeniAd || !yeniNo){ alert('Başlık ve numara boş olamaz.'); return; }
+        kat.kayitlar[idx] = {ad:yeniAd, no:yeniNo};
+        rehberYaz(rehberVeri);
+        rehberTamCiz();
+      });
+    });
+  });
+}
+
+function rehberTamCiz(){
+  rehberKatMenuCiz();
+  rehberIcerikCiz();
+}
+rehberTamCiz();
+
+document.getElementById('rehberEkleToggle').addEventListener('click', ()=>{
+  const form = document.getElementById('rehberEkleForm');
+  form.style.display = form.style.display==='none' ? 'block' : 'none';
+});
+
+document.getElementById('rehberKaydetBtn').addEventListener('click', ()=>{
+  const ad = document.getElementById('rehberYeniAd').value.trim();
+  const no = document.getElementById('rehberYeniNo').value.trim();
+  if(!ad || !no){ alert('Lütfen başlık ve numara girin.'); return; }
+  const kat = rehberVeri.kategoriler.find(k=>k.id===rehberVeri.aktifKategori) || rehberVeri.kategoriler[0];
+  kat.kayitlar.push({ad, no});
+  rehberYaz(rehberVeri);
+  document.getElementById('rehberYeniAd').value = '';
+  document.getElementById('rehberYeniNo').value = '';
+  document.getElementById('rehberEkleForm').style.display = 'none';
+  rehberTamCiz();
+});
+
+document.getElementById('rehberKategoriEkleBtn').addEventListener('click', ()=>{
+  const ad = document.getElementById('rehberYeniKategori').value.trim();
+  if(!ad){ alert('Lütfen bir kategori adı girin.'); return; }
+  const id = 'kat_' + Date.now();
+  rehberVeri.kategoriler.push({id, ad, sabit:false, kayitlar:[]});
+  rehberVeri.aktifKategori = id;
+  rehberYaz(rehberVeri);
+  document.getElementById('rehberYeniKategori').value = '';
+  rehberTamCiz();
+});
 
 // PWA: service worker kaydı (APK üretimi ve "yükle" istemi için gerekli)
 if('serviceWorker' in navigator){
