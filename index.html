@@ -786,6 +786,28 @@
         </div>
       </div>
 
+      <div class="field">
+        <div class="icon green">⛽</div>
+        <div class="field-body">
+          <label for="seyirMevcutYakit">Mevcut Yakıt (opsiyonel)</label>
+          <div class="input-wrap">
+            <input type="number" id="seyirMevcutYakit" inputmode="decimal" placeholder="120">
+            <span class="unit">L</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="icon blue">💧</div>
+        <div class="field-body">
+          <label for="seyirTuketim">Ortalama Tüketim (opsiyonel)</label>
+          <div class="input-wrap">
+            <input type="number" id="seyirTuketim" inputmode="decimal" placeholder="13">
+            <span class="unit">L/h</span>
+          </div>
+        </div>
+      </div>
+
       <div class="section-title" style="font-size:15px;margin-top:10px;">ROTA BACAKLARI (açı ° · mesafe NM)</div>
       <div id="seyirLegs"></div>
       <button class="leg-add-btn" id="seyirLegAdd">+ Bacak Ekle</button>
@@ -1499,8 +1521,26 @@ function hesaplaSeyir(){
       <div class="eta-label">TAHMİNİ VARIŞ (ETA)</div>
       <div class="eta-value">${formatTime(eta)}</div>
     </div>
-    <div class="note-box" style="margin-top:14px;margin-bottom:0;">⚠️ Rüzgar şiddeti ve yönü güzergah üzerinde (irtifa/bölgeye göre) değişebilir. Bu hesap tek bir sabit rüzgar değerine dayanır — sonucu Güzergah Bulut &amp; Rüzgar sekmesiyle karşılaştırıp kontrol edin.</div>
   `;
+
+  const mevcutYakit = parseFloat(document.getElementById('seyirMevcutYakit').value);
+  const tuketim = parseFloat(document.getElementById('seyirTuketim').value);
+  if(!isNaN(mevcutYakit) && !isNaN(tuketim) && tuketim>0){
+    const harcanan = (toplamDakika/60) * tuketim;
+    const kalanYakit = mevcutYakit - harcanan;
+    const renk = kalanYakit < 0 ? '#c0392b' : 'var(--navy-dark)';
+    html += `
+      <div class="remaining" style="color:${renk};">
+        VARIŞTA TAHMİNİ YAKIT: ${kalanYakit.toFixed(1)} L
+        <div style="font-size:11px;font-weight:400;color:#5a7893;margin-top:2px;">(${mevcutYakit} L − ${harcanan.toFixed(1)} L harcanan · ${tuketim} L/h × ${saat} sa ${dakika} dk)</div>
+      </div>
+    `;
+    if(kalanYakit < 0){
+      html += `<div class="error-msg" style="margin-top:8px;">⚠️ Bu rota mevcut yakıtla tamamlanamaz — yakıt yetmiyor.</div>`;
+    }
+  }
+
+  html += `<div class="note-box" style="margin-top:14px;margin-bottom:0;">⚠️ Rüzgar şiddeti ve yönü güzergah üzerinde (irtifa/bölgeye göre) değişebilir. Bu hesap tek bir sabit rüzgar değerine dayanır — sonucu Güzergah Bulut &amp; Rüzgar sekmesiyle karşılaştırıp kontrol edin.</div>`;
   box.innerHTML = html;
 }
 document.getElementById('seyirBtn').addEventListener('click', hesaplaSeyir);
