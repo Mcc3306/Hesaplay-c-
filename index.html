@@ -707,6 +707,25 @@
         </div>
       </div>
 
+      <div class="field">
+        <div class="icon blue">🌐</div>
+        <div class="field-body">
+          <label for="havaModeli">Hava Tahmin Modeli</label>
+          <div class="input-wrap">
+            <select id="havaModeli" style="border:none;background:transparent;outline:none;font-size:15px;font-weight:700;color:var(--navy-dark);width:100%;padding:4px 0;">
+              <option value="best_match">Otomatik (Best Match)</option>
+              <option value="icon_eu" selected>DWD ICON-EU (Windy'nin kullandığı, ~3 saatte bir)</option>
+              <option value="icon_global">DWD ICON Global (~6 saatte bir)</option>
+              <option value="gfs_seamless">NOAA GFS (~6 saatte bir)</option>
+              <option value="ecmwf_ifs025">ECMWF IFS (~12 saatte bir)</option>
+              <option value="gem_seamless">Kanada GEM (~6 saatte bir)</option>
+              <option value="meteofrance_seamless">Météo-France ARPEGE (~6 saatte bir)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="note-box" id="modelNotu" style="margin-top:-8px;"></div>
+
       <div class="section-title" style="font-size:15px;margin-top:10px;">ROTA BACAKLARI (açı ° · mesafe NM)</div>
       <div id="bulutLegs"></div>
       <button class="leg-add-btn" id="bulutLegAdd">+ Bacak Ekle</button>
@@ -1229,6 +1248,24 @@ function bacaklariOku(containerId){
 document.getElementById('bulutLegAdd').addEventListener('click', ()=>legRowEkle('bulutLegs'));
 document.getElementById('seyirLegAdd').addEventListener('click', ()=>legRowEkle('seyirLegs'));
 legRowEkle('bulutLegs');
+
+/* hava tahmin modeli notu (tipik güncelleme sıklığı — gerçek zamanlı "son çalışma saati" API'den alınamıyor) */
+const MODEL_NOTLARI = {
+  best_match: "ℹ️ Farklı modellerin otomatik en uygun kombinasyonu. Güncelleme sıklığı konuma göre değişir.",
+  icon_eu: "ℹ️ Almanya Meteoroloji Servisi (DWD) modeli, ~7km çözünürlük, tipik olarak yaklaşık her 3 saatte bir güncellenir. Windy'nin ICON-EU katmanıyla aynı kaynak.",
+  icon_global: "ℹ️ DWD'nin küresel modeli, ~13km çözünürlük, tipik olarak yaklaşık her 6 saatte bir güncellenir.",
+  gfs_seamless: "ℹ️ NOAA'nın (ABD) küresel modeli, tipik olarak yaklaşık her 6 saatte bir güncellenir.",
+  ecmwf_ifs025: "ℹ️ Avrupa Orta Vadeli Tahminler Merkezi modeli, tipik olarak yaklaşık her 12 saatte bir güncellenir — genelde en isabetli kabul edilir ama ICON-EU kadar sık tazelenmez.",
+  gem_seamless: "ℹ️ Kanada Meteoroloji Servisi modeli, tipik olarak yaklaşık her 6 saatte bir güncellenir.",
+  meteofrance_seamless: "ℹ️ Fransa Meteoroloji Servisi (ARPEGE) modeli, tipik olarak yaklaşık her 6 saatte bir güncellenir.",
+};
+function modelNotuGuncelle(){
+  const secim = document.getElementById('havaModeli').value;
+  document.getElementById('modelNotu').innerHTML = (MODEL_NOTLARI[secim] || "") + "<br><span style=\"font-size:10.5px;color:#7a8a99;\">Not: Open-Meteo, modelin tam olarak hangi saatte çalıştığını canlı bildirmiyor — yukarıdaki sadece tipik/ortalama sıklıktır.</span>";
+}
+document.getElementById('havaModeli').addEventListener('change', modelNotuGuncelle);
+modelNotuGuncelle();
+
 legRowEkle('seyirLegs');
 
 /* ========================= GÜZERGAH BULUT & İRTİFA RÜZGARI ========================= */
@@ -1275,18 +1312,30 @@ async function getirBulutRuzgar(){
   const seviyeUst = idx>0 ? BASINC_SEVIYELERI[idx-1] : seviyeSu; // daha düşük basınç = daha yüksek irtifa
   const seviyeAlt = idx<BASINC_SEVIYELERI.length-1 ? BASINC_SEVIYELERI[idx+1] : seviyeSu; // daha yüksek basınç = daha düşük irtifa
 
-  // kalkıştan başlayarak her bacağın bitiş koordinatını (dead-reckoning) üret
-  const noktalar = [{lat: kalkis.lat, lon: kalkis.lon, etiket:"KALKIŞ"}];
+  // kalkıştan başlayarak her bacağı 15 NM aralıklarla örnekleyip nokta üret (dead-reckoning)
+  const ARALIK_NM = 15;
+  const noktalar = [{lat: kalkis.lat, lon: kalkis.lon, etiket:"KALKIŞ (0 NM)"}];
   let son = {lat: kalkis.lat, lon: kalkis.lon};
+  let toplamKatMesafe = 0;
   bacaklar.forEach((b,i)=>{
-    son = ileriNokta(son.lat, son.lon, b.heading, b.dist * 1.852); // NM -> km
-    noktalar.push({lat: son.lat, lon: son.lon, etiket: (i===bacaklar.length-1 ? "VARIŞ" : "BACAK "+(i+1)+" SONU")});
+    let kalanMesafe = b.dist;
+    while(kalanMesafe > 0){
+      const buAdim = Math.min(ARALIK_NM, kalanMesafe);
+      son = ileriNokta(son.lat, son.lon, b.heading, buAdim * 1.852); // NM -> km
+      toplamKatMesafe += buAdim;
+      kalanMesafe -= buAdim;
+      const sonBacakVeSonAdim = (i===bacaklar.length-1 && kalanMesafe<=0.001);
+      const etiket = sonBacakVeSonAdim ? `VARIŞ (${toplamKatMesafe.toFixed(0)} NM)` : `BACAK ${i+1} — ${toplamKatMesafe.toFixed(0)} NM`;
+      noktalar.push({lat: son.lat, lon: son.lon, etiket});
+    }
   });
+
+  const secilenModel = document.getElementById('havaModeli').value;
 
   try{
     const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,cloud_cover_${seviyeAlt}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
     const sonuclar = await Promise.all(noktalar.map(async (n) => {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn&models=icon_eu`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn&models=${secilenModel}`;
       const res = await fetch(url);
       const data = await res.json();
       const idx0 = 0; // en yakın saat
@@ -1316,7 +1365,9 @@ async function getirBulutRuzgar(){
       return `<div style="color:#1f5c2b;font-weight:700;">✅ ${etiket}: bulut yok (%${Math.round(yuzde)})</div>`;
     }
 
-    let html = '<div class="note-box" style="line-height:1.8;">';
+    const modelEtiketleri = {best_match:"Otomatik (Best Match)", icon_eu:"DWD ICON-EU", icon_global:"DWD ICON Global", gfs_seamless:"NOAA GFS", ecmwf_ifs025:"ECMWF IFS", gem_seamless:"Kanada GEM", meteofrance_seamless:"Météo-France ARPEGE"};
+    let html = `<div class="route-label" style="margin-bottom:10px;">Model: ${modelEtiketleri[secilenModel]||secilenModel} · ${noktalar.length} nokta (~${ARALIK_NM} NM aralıklı)</div>`;
+    html += '<div class="note-box" style="line-height:1.8;">';
     html += seviyeSatiri("İrtifanızda", suTehlike, maxBulutSu);
     html += seviyeSatiri("İrtifa üzerinde", ustTehlike, maxBulutUst);
     html += seviyeSatiri("İrtifa altında", altTehlike, maxBulutAlt);
