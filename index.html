@@ -1337,12 +1337,18 @@ async function getirBulutRuzgar(){
 
   box.innerHTML = '<div class="result-empty">Getiriliyor...</div>';
 
-  // irtifaya en yakın basınç seviyesi + bir üst (yüksek irtifa) + bir alt (düşük irtifa) seviye
+  // irtifaya en yakın basınç seviyesi + bir alt + bir üst + bir üstünün üstü (4 seviye, 3 bant oluşturur)
   const hedefHpa = ftDenHpaYe(irtifaFt);
   const seviyeSu = enYakinSeviye(hedefHpa);
   const idx = BASINC_SEVIYELERI.indexOf(seviyeSu);
-  const seviyeUst = idx>0 ? BASINC_SEVIYELERI[idx-1] : seviyeSu; // daha düşük basınç = daha yüksek irtifa
-  const seviyeAlt = idx<BASINC_SEVIYELERI.length-1 ? BASINC_SEVIYELERI[idx+1] : seviyeSu; // daha yüksek basınç = daha düşük irtifa
+  const seviyeUst = idx>0 ? BASINC_SEVIYELERI[idx-1] : seviyeSu;
+  const seviyeUst2 = idx>1 ? BASINC_SEVIYELERI[idx-2] : seviyeUst;
+  const seviyeAlt = idx<BASINC_SEVIYELERI.length-1 ? BASINC_SEVIYELERI[idx+1] : seviyeSu;
+
+  const ftAlt = Math.round(hpaDenFtYe(seviyeAlt));
+  const ftSu = Math.round(hpaDenFtYe(seviyeSu));
+  const ftUst = Math.round(hpaDenFtYe(seviyeUst));
+  const ftUst2 = Math.round(hpaDenFtYe(seviyeUst2));
 
   // kalkıştan başlayarak her bacağı 15 NM aralıklarla örnekleyip nokta üret (dead-reckoning)
   const ARALIK_NM = 15;
@@ -1364,57 +1370,74 @@ async function getirBulutRuzgar(){
 
   const secilenModel = document.getElementById('havaModeli').value;
 
+  // API'nin döndürdüğü saat dizisinde GERÇEKTEN "şu ana en yakın" olanı bul (index 0 her zaman "şimdi" değildir!)
+  function enYakinSaatIndex(zamanDizisi){
+    if(!zamanDizisi || zamanDizisi.length===0) return 0;
+    const simdi = Date.now();
+    let enIyiIdx = 0, enKucukFark = Infinity;
+    zamanDizisi.forEach((t,i)=>{
+      const fark = Math.abs(new Date(t).getTime() - simdi);
+      if(fark < enKucukFark){ enKucukFark = fark; enIyiIdx = i; }
+    });
+    return enIyiIdx;
+  }
+
   try{
-    const degiskenler = `cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,cloud_cover_${seviyeAlt}hPa,wind_speed_${seviyeSu}hPa,wind_direction_${seviyeSu}hPa`;
+    const degiskenler = `cloud_cover_${seviyeAlt}hPa,cloud_cover_${seviyeSu}hPa,cloud_cover_${seviyeUst}hPa,cloud_cover_${seviyeUst2}hPa,wind_speed_${seviyeAlt}hPa,wind_speed_${seviyeSu}hPa,wind_speed_${seviyeUst}hPa,wind_speed_${seviyeUst2}hPa,wind_direction_${seviyeSu}hPa`;
     const sonuclar = await Promise.all(noktalar.map(async (n) => {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=1&wind_speed_unit=kn&models=${secilenModel}`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${n.lat.toFixed(3)}&longitude=${n.lon.toFixed(3)}&hourly=${degiskenler}&forecast_days=2&timezone=auto&wind_speed_unit=kn&models=${secilenModel}`;
       const res = await fetch(url);
       const data = await res.json();
-      const idx0 = 0; // en yakın saat
+      const zamanDizisi = data.hourly?.time;
+      const idx0 = enYakinSaatIndex(zamanDizisi);
       return {
         nokta: n,
         etiket: n.etiket,
+        saat: zamanDizisi ? zamanDizisi[idx0] : null,
+        bulutAlt: data.hourly?.[`cloud_cover_${seviyeAlt}hPa`]?.[idx0],
         bulutSu: data.hourly?.[`cloud_cover_${seviyeSu}hPa`]?.[idx0],
         bulutUst: data.hourly?.[`cloud_cover_${seviyeUst}hPa`]?.[idx0],
-        bulutAlt: data.hourly?.[`cloud_cover_${seviyeAlt}hPa`]?.[idx0],
-        ruzgarHiz: data.hourly?.[`wind_speed_${seviyeSu}hPa`]?.[idx0],
+        bulutUst2: data.hourly?.[`cloud_cover_${seviyeUst2}hPa`]?.[idx0],
+        ruzgarAlt: data.hourly?.[`wind_speed_${seviyeAlt}hPa`]?.[idx0],
+        ruzgarSu: data.hourly?.[`wind_speed_${seviyeSu}hPa`]?.[idx0],
+        ruzgarUst: data.hourly?.[`wind_speed_${seviyeUst}hPa`]?.[idx0],
+        ruzgarUst2: data.hourly?.[`wind_speed_${seviyeUst2}hPa`]?.[idx0],
         ruzgarYon: data.hourly?.[`wind_direction_${seviyeSu}hPa`]?.[idx0],
       };
     }));
 
-    const maxBulutSu = Math.max(...sonuclar.map(s=>s.bulutSu ?? 0));
-    const maxBulutUst = Math.max(...sonuclar.map(s=>s.bulutUst ?? 0));
-    const maxBulutAlt = Math.max(...sonuclar.map(s=>s.bulutAlt ?? 0));
-    const maxRuzgar = Math.max(...sonuclar.map(s=>s.ruzgarHiz ?? 0));
+    // 3 bant için maksimum bulut (her bandı sınırlayan iki seviyenin en kötüsü baz alınır)
+    const maxBantAlt = Math.max(...sonuclar.map(s=>Math.max(s.bulutAlt??0, s.bulutSu??0)));       // ftAlt - ftSu arası
+    const maxBantOrta = Math.max(...sonuclar.map(s=>Math.max(s.bulutSu??0, s.bulutUst??0)));       // ftSu - ftUst arası
+    const maxBantUst = Math.max(...sonuclar.map(s=>Math.max(s.bulutUst??0, s.bulutUst2??0)));      // ftUst üzeri
 
-    const suTehlike = maxBulutSu>50, ustTehlike = maxBulutUst>50, altTehlike = maxBulutAlt>50;
+    const maxRuzgar = Math.max(...sonuclar.map(s=>Math.max(s.ruzgarAlt??0, s.ruzgarSu??0, s.ruzgarUst??0, s.ruzgarUst2??0)));
+
+    const altTehlike = maxBantAlt>50, ortaTehlike = maxBantOrta>50, ustTehlike = maxBantUst>50;
     const ruzgarTehlike = maxRuzgar>ruzgarSinirKt;
 
-    function seviyeSatiri(etiket, tehlikeVar, yuzde){
+    function bantSatiri(aFt, bFt, ustSinirsiz, tehlikeVar, yuzde){
+      const etiket = ustSinirsiz ? `${aFt.toLocaleString('tr-TR')} ft üzeri` : `${aFt.toLocaleString('tr-TR')} - ${bFt.toLocaleString('tr-TR')} ft arası`;
       if(tehlikeVar){
-        return `<div style="color:#c0392b;font-weight:800;">⚠️ ${etiket}: bulut VAR (%${Math.round(yuzde)})</div>`;
+        return `<div style="color:#c0392b;font-weight:800;">⚠️ ${etiket}: %${Math.round(yuzde)} bulutluluk</div>`;
       }
-      return `<div style="color:#1f5c2b;font-weight:700;">✅ ${etiket}: bulut yok (%${Math.round(yuzde)})</div>`;
+      const durum = yuzde<10 ? 'açık' : `%${Math.round(yuzde)} bulutluluk`;
+      return `<div style="color:#1f5c2b;font-weight:700;">✅ ${etiket}: ${durum}</div>`;
     }
 
     const modelEtiketleri = {best_match:"Otomatik (Best Match)", icon_eu:"DWD ICON-EU", icon_global:"DWD ICON Global", gfs_seamless:"NOAA GFS", ecmwf_ifs025:"ECMWF IFS", gem_seamless:"Kanada GEM", meteofrance_seamless:"Météo-France ARPEGE"};
-    let html = `<div class="route-label" style="margin-bottom:10px;">Model: ${modelEtiketleri[secilenModel]||secilenModel} · ${noktalar.length} nokta (~${ARALIK_NM} NM aralıklı)</div>`;
+    const ornekSaat = sonuclar[0]?.saat ? new Date(sonuclar[0].saat).toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
+
+    let html = `<div class="route-label" style="margin-bottom:10px;">Model: ${modelEtiketleri[secilenModel]||secilenModel} · ${noktalar.length} nokta (~${ARALIK_NM} NM aralıklı) · Tahmin saati: ${ornekSaat}</div>`;
+
     html += '<div class="note-box" style="line-height:1.8;">';
-    html += seviyeSatiri("İrtifanızda", suTehlike, maxBulutSu);
-    html += seviyeSatiri("İrtifa üzerinde", ustTehlike, maxBulutUst);
-    html += seviyeSatiri("İrtifa altında", altTehlike, maxBulutAlt);
-    if(ruzgarTehlike){
-      html += `<div style="color:#c0392b;font-weight:800;">⚠️ Rüzgar: sınırı aşıyor (${Math.round(maxRuzgar)} kt / sınır ${ruzgarSinirKt} kt)</div>`;
-    }else{
-      html += `<div style="color:#1f5c2b;font-weight:700;">✅ Rüzgar: sınır içinde (${Math.round(maxRuzgar)} kt / sınır ${ruzgarSinirKt} kt)</div>`;
-    }
+    html += bantSatiri(ftAlt, ftSu, false, altTehlike, maxBantAlt);
+    html += bantSatiri(ftSu, ftUst, false, ortaTehlike, maxBantOrta);
+    html += bantSatiri(ftUst, null, true, ustTehlike, maxBantUst);
     html += '</div>';
 
     html += `<div class="metar-summary" style="margin-bottom:12px;">
-      <div><b>MAKS BULUT (irtifan)</b>%${Math.round(maxBulutSu)}</div>
-      <div><b>MAKS BULUT (üstünde)</b>%${Math.round(maxBulutUst)}</div>
-      <div><b>MAKS BULUT (altında)</b>%${Math.round(maxBulutAlt)}</div>
-      <div><b>MAKS RÜZGAR</b>${Math.round(maxRuzgar)} kt</div>
+      <div style="grid-column:span 2;"><b>GÜZERGAH ÜZERİNDE MAKSİMUM RÜZGAR</b>${Math.round(maxRuzgar)} kt ${ruzgarTehlike ? '<span style="color:#c0392b;">⚠️ sınırı ('+ruzgarSinirKt+' kt) aşıyor</span>' : '<span style="color:#1f5c2b;">✅ sınır içinde</span>'}</div>
     </div>`;
 
     sonuclar.forEach(s=>{
@@ -1422,8 +1445,8 @@ async function getirBulutRuzgar(){
         <div class="waypoint-row">
           <div class="wp-name">${s.etiket}<br><span style="font-weight:400;font-size:10.5px;color:#5a7893;">${s.nokta.lat.toFixed(2)}, ${s.nokta.lon.toFixed(2)}</span></div>
           <div class="wp-data">
-            İrtifanda: bulut %${s.bulutSu ?? '—'} · rüzgar ${s.ruzgarYon ?? '—'}°/${s.ruzgarHiz ? Math.round(s.ruzgarHiz) : '—'}kt<br>
-            Üstünde: %${s.bulutUst ?? '—'} · Altında: %${s.bulutAlt ?? '—'}
+            ${ftAlt}-${ftSu}ft: %${s.bulutAlt ?? '—'}/${s.bulutSu ?? '—'} · ${ftSu}-${ftUst}ft: %${s.bulutUst ?? '—'}<br>
+            ${ftUst}ft+: %${s.bulutUst2 ?? '—'} · rüzgar ${s.ruzgarYon ?? '—'}°/${s.ruzgarSu ? Math.round(s.ruzgarSu) : '—'}kt
           </div>
         </div>
       `;
