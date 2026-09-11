@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <title>Uçuş Yardımcısı</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0e3a5f">
@@ -606,12 +606,10 @@
       <span class="tab-emoji">📞</span>
       <span>Telefon<br>Rehberi</span>
     </button>
-    <!-- TMA'lar sekmesi geçici olarak gizlendi — Türkiye TMA haritası görseli gelince tekrar açılacak
     <button class="tab-btn" data-tab="tma">
       <span class="tab-emoji">🗺️</span>
       <span>TMA'lar</span>
     </button>
-    -->
   </div>
 
   <div class="landing" id="landing">Yukarıdan bir modül seçin.</div>
@@ -853,21 +851,14 @@
 
     <div id="tab-tma" class="tab-content">
       <div class="section-title">TMA'LAR — SORUMLULUK HARİTASI</div>
-      <div class="note-box">⚠️ <b>Önemli:</b> Aşağıdaki harita sadece genel/şematik bir referanstır (ölçekli veya kesin sınır çizimi değildir). Her meydanın tam resmi TMA sorumluluk sınırı ve irtifa bloğu bilgisi AIP/ENR yayınlarında yer alır — bende doğrulanmış hassas veri olmadığı için uydurmadım. Kesin sınır/irtifa bilgisini resmi kaynaktan teyit edip aşağıya kendin ekleyebilirsin.</div>
+      <div class="note-box">Sağladığın resmi harita görüntü işlemeyle (parazit azaltma + netleştirme) temizlendi, hiçbir yazı/sayı elle değiştirilmedi — orijinal veriye sadık kaldı. Detayları okumak için haritayı <b>parmaklarınla yakınlaştırabilirsin (pinch-zoom)</b>.</div>
 
-      <div style="background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;padding:10px;margin-bottom:16px;">
-        <svg viewBox="0 0 560 200" style="width:100%;height:auto;">
-          <polygon points="20,40 70,20 180,15 320,10 430,15 470,50 490,90 460,130 400,170 370,155 380,150 300,165 220,160 150,140 100,110 60,80"
-            fill="rgba(31,127,193,0.18)" stroke="var(--navy-dark)" stroke-width="2"/>
-          <polygon points="20,40 70,20 180,15 165,55 130,75 100,110 60,80"
-            fill="rgba(224,138,30,0.35)" stroke="var(--navy-dark)" stroke-width="1.5" stroke-dasharray="4,3"/>
-          <text x="90" y="55" font-size="11" font-weight="800" fill="var(--navy-dark)">İSTANBUL FIR</text>
-          <text x="280" y="100" font-size="13" font-weight="800" fill="var(--navy-dark)">ANKARA FIR</text>
-        </svg>
-        <div style="text-align:center;font-size:10.5px;color:#5a7893;margin-top:4px;">Şematik gösterim — ölçekli değildir, kesin sınır için AIP ENR 2.1'e bakınız.</div>
+      <div style="background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;padding:6px;margin-bottom:16px;overflow:auto;">
+        <img src="tma-harita.jpg" alt="Türkiye TMA Sorumluluk Haritası" style="width:100%;height:auto;border-radius:8px;display:block;">
       </div>
 
       <div class="section-title" style="font-size:15px;">Manuel Sorumluluk Notları</div>
+      <div class="note-box" style="margin-top:-8px;">Haritadan okuduğun veya ayrıca teyit ettiğin bilgileri buraya not olarak da ekleyebilirsin.</div>
       <div id="tmaIcerik"></div>
 
       <div id="tmaEkleForm" style="display:none;">

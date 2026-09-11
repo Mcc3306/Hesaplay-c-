@@ -1,9 +1,10 @@
-const CACHE_NAME = "tb2-hesaplayici-v1";
+const CACHE_NAME = "tb2-hesaplayici-v2";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./tma-harita.jpg"
 ];
 
 self.addEventListener("install", (event) => {
