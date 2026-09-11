@@ -1,4 +1,4 @@
-const CACHE_NAME = "tb2-hesaplayici-v2";
+const CACHE_NAME = "tb2-hesaplayici-v3";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
