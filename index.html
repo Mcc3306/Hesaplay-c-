@@ -1886,8 +1886,11 @@ document.getElementById('ataturkBadge').addEventListener('click', ()=>{
 
   let scale = 1, tx = 0, ty = 0;
   let baslangicMesafe = 0, baslangicScale = 1;
+  let pinchOrijinX = 0, pinchOrijinY = 0; // pinch başladığındaki parmak-ortası noktasının GÖRSEL içindeki (ölçeksiz) koordinatı
   let sonDokunmaX = 0, sonDokunmaY = 0;
   let tekParmakAktif = false;
+  let maxParmakSayisi = 0;
+  let sonTiklamaZamani = 0;
 
   function uygula(){
     img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
@@ -1895,7 +1898,6 @@ document.getElementById('ataturkBadge').addEventListener('click', ()=>{
 
   function resetle(){
     scale = 1; tx = 0; ty = 0;
-    // görseli sarmalayıcıya ortalanmış şekilde sığdır (başlangıç boyutu)
     img.style.maxWidth = 'none';
     img.style.width = wrap.clientWidth + 'px';
     img.style.height = 'auto';
@@ -1916,10 +1918,23 @@ document.getElementById('ataturkBadge').addEventListener('click', ()=>{
     return Math.sqrt(dx*dx + dy*dy);
   }
 
+  function ortaNokta(t1, t2){
+    const rect = wrap.getBoundingClientRect();
+    return {
+      x: (t1.clientX + t2.clientX)/2 - rect.left,
+      y: (t1.clientY + t2.clientY)/2 - rect.top
+    };
+  }
+
   wrap.addEventListener('touchstart', (e)=>{
+    maxParmakSayisi = Math.max(maxParmakSayisi, e.touches.length);
     if(e.touches.length === 2){
       baslangicMesafe = mesafe(e.touches[0], e.touches[1]);
       baslangicScale = scale;
+      const orta = ortaNokta(e.touches[0], e.touches[1]);
+      // parmakların ortasındaki noktanın, görselin ÖLÇEKSİZ koordinat sisteminde karşılık geldiği yer
+      pinchOrijinX = (orta.x - tx) / scale;
+      pinchOrijinY = (orta.y - ty) / scale;
       tekParmakAktif = false;
     }else if(e.touches.length === 1){
       tekParmakAktif = true;
@@ -1933,6 +1948,10 @@ document.getElementById('ataturkBadge').addEventListener('click', ()=>{
       e.preventDefault();
       const yeniMesafe = mesafe(e.touches[0], e.touches[1]);
       scale = Math.min(6, Math.max(1, baslangicScale * (yeniMesafe / baslangicMesafe)));
+      const orta = ortaNokta(e.touches[0], e.touches[1]);
+      // pinch orijin noktası, parmakların şu anki ortasının altında kalmaya devam etsin
+      tx = orta.x - pinchOrijinX * scale;
+      ty = orta.y - pinchOrijinY * scale;
       uygula();
     }else if(e.touches.length === 1 && tekParmakAktif){
       e.preventDefault();
@@ -1947,20 +1966,21 @@ document.getElementById('ataturkBadge').addEventListener('click', ()=>{
 
   wrap.addEventListener('touchend', (e)=>{
     if(e.touches.length < 2) baslangicMesafe = 0;
-    if(e.touches.length === 0) tekParmakAktif = false;
-  }, {passive:true});
-
-  // çift tıkla/dokun ile hızlı yakınlaştır-uzaklaştır (masaüstü test için de faydalı)
-  let sonTiklama = 0;
-  wrap.addEventListener('touchend', ()=>{
-    const simdi = Date.now();
-    if(simdi - sonTiklama < 300){
-      scale = scale > 1.5 ? 1 : 2.5;
-      tx = 0; ty = 0;
-      uygula();
+    if(e.touches.length === 0){
+      tekParmakAktif = false;
+      // çift-dokunma kontrolünü SADECE gerçek tek parmaklı bir dokunuş serisiyse çalıştır (pinch sonrası tetiklenmesin)
+      if(maxParmakSayisi < 2){
+        const simdi = Date.now();
+        if(simdi - sonTiklamaZamani < 300){
+          scale = scale > 1.5 ? 1 : 2.5;
+          tx = 0; ty = 0;
+          uygula();
+        }
+        sonTiklamaZamani = simdi;
+      }
+      maxParmakSayisi = 0;
     }
-    sonTiklama = simdi;
-  });
+  }, {passive:true});
 })();
 
 // PWA: service worker kaydı (APK üretimi ve "yükle" istemi için gerekli)
