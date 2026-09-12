@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vardiya Eksilme Listesi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .app-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 0.5rem;
+        }
+        
+        .status-badge.online {
+            background: rgba(76, 175, 80, 0.5);
+        }
+        
+        .status-badge.offline {
+            background: rgba(244, 67, 54, 0.5);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            flex-wrap: wrap;
+        }
+        
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tab-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .tab-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .color-picker {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(45px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        
+        .color-option {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+        
+        .color-option.selected {
+            border-color: #333;
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #333;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        
+        .btn-secondary:hover {
+            background: #e8e8e8;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 12px;
+        }
+        
+        .person-list {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .person-item {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .person-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+        }
+        
+        .person-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .person-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .person-name {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 0.25rem;
+        }
+        
+        .person-rank {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .person-points {
+            font-weight: 700;
+            font-size: 18px;
+            color: #667eea;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        .person-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            border: 1px solid #e0e0e0;
+            transition: all 0.2s;
+        }
+        
+        .checkbox-item:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+        }
+        
+        .checkbox-item input {
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            accent-color: #667eea;
+        }
+        
+        .checkbox-label {
+            flex: 1;
+            cursor: pointer;
+        }
+        
+        .checkbox-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .final-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        
+        .final-item {
+            padding: 1.25rem;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .final-number {
+            min-width: 40px;
+            text-align: center;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        
+        .final-name {
+            flex: 1;
+            font-size: 16px;
+        }
+        
+        .final-points {
+            font-size: 14px;
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+        }
+        
+        .nob-section {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+        }
+        
+        .nob-title {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .nob-name {
+            font-size: 24px;
+            font-weight: 700;
+            word-break: break-word;
+        }
+        
+        .point-input-group {
+            display: grid;
+            grid-template-columns: 1fr 100px;
+            gap: 1rem;
+            align-items: end;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .point-input-group input {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .point-input-group label {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1.5rem;
+            font-size: 14px;
+            color: #1976d2;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+        
+        .loading i {
+            animation: spin 1s linear infinite;
+            font-size: 32px;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                padding: 1.5rem;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+            }
+            
+            .tab-content {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        // Firebase config - ÖNEMLİ: Kendi Firebase projenizi oluşturup, bu değerleri değiştirin
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtxR3I4pK7mQ9wL2hJ1bN8vK5cP0xY9zO",
+            authDomain: "vardiya-listesi-58f5b.firebaseapp.com",
+            databaseURL: "https://vardiya-listesi-58f5b-default-rtdb.europe-west1.firebaseio.com",
+            projectId: "vardiya-listesi-58f5b",
+            storageBucket: "vardiya-listesi-58f5b.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890ghijk"
+        };
+        
+        // Firebase başlat
+        let firebase = window.firebase;
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const database = firebase.database();
+        
+        function App() {
+            const [activeTab, setActiveTab] = useState('isimler');
+            const [personData, setPersonData] = useState([]);
+            const [selectedColor, setSelectedColor] = useState('#3B82F6');
+            const [currentShift, setCurrentShift] = useState({ date: '', members: [], nobetci: null });
+            const [loading, setLoading] = useState(true);
+            const [online, setOnline] = useState(navigator.onLine);
+            const [isSyncing, setIsSyncing] = useState(false);
+            
+            // Form inputs
+            const [inputRank, setInputRank] = useState('Yzb');
+            const [inputName, setInputName] = useState('');
+            const [inputPoints, setInputPoints] = useState('0');
+            const [shiftDate, setShiftDate] = useState('');
+            
+            const colors = [
+                '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+                '#8B5CF6', '#EC4899', '#06B6D4', '#6366F1'
+            ];
+            
+            // Firebase'den veri çek
+            useEffect(() => {
+                const personRef = database.ref('personel');
+                const shiftRef = database.ref('shift');
+                
+                personRef.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    setPersonData(data ? Object.values(data) : []);
+                    setLoading(false);
+                });
+                
+                shiftRef.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        setCurrentShift(data);
+                        setShiftDate(data.date || '');
+                    }
+                });
+                
+                // Online/offline durumu
+                window.addEventListener('online', () => setOnline(true));
+                window.addEventListener('offline', () => setOnline(false));
+                
+                return () => {
+                    personRef.off();
+                    shiftRef.off();
+                };
+            }, []);
+            
+            // Personel ekle
+            const addPerson = () => {
+                if (!inputName.trim()) {
+                    alert('Ad soyad giriniz');
+                    return;
+                }
+                
+                setIsSyncing(true);
+                const newPerson = {
+                    id: Date.now(),
+                    rank: inputRank,
+                    name: inputName.trim(),
+                    points: parseInt(inputPoints) || 0,
+                    color: selectedColor,
+                    createdDate: new Date().toLocaleDateString('tr-TR')
+                };
+                
+                database.ref(`personel/${newPerson.id}`).set(newPerson)
+                    .then(() => {
+                        setInputName('');
+                        setInputPoints('0');
+                        setIsSyncing(false);
+                    })
+                    .catch(error => {
+                        alert('Hata: ' + error.message);
+                        setIsSyncing(false);
+                    });
+            };
+            
+            // Personel sil
+            const deletePerson = (id) => {
+                if (window.confirm('Silmek istediğinize emin misiniz?')) {
+                    setIsSyncing(true);
+                    database.ref(`personel/${id}`).remove()
+                        .then(() => setIsSyncing(false))
+                        .catch(error => {
+                            alert('Hata: ' + error.message);
+                            setIsSyncing(false);
+                        });
+                }
+            };
+            
+            // Vardiyaya çıkış
+            const toggleShiftMember = (id) => {
+                const newMembers = currentShift.members.includes(id)
+                    ? currentShift.members.filter(m => m !== id)
+                    : [...currentShift.members, id];
+                
+                setIsSyncing(true);
+                database.ref('shift/members').set(newMembers)
+                    .then(() => setIsSyncing(false))
+                    .catch(error => {
+                        alert('Hata: ' + error.message);
+                        setIsSyncing(false);
+                    });
+            };
+            
+            // Tarihi kaydet
+            const saveShiftDate = () => {
+                if (!shiftDate) {
+                    alert('Lütfen tarihi seçiniz');
+                    return;
+                }
+                
+                setIsSyncing(true);
+                database.ref('shift/date').set(shiftDate)
+                    .then(() => {
+                        setCurrentShift(prev => ({ ...prev, date: shiftDate }));
+                        setIsSyncing(false);
+                        alert('Vardiya tarihi kaydedildi');
+                    })
+                    .catch(error => {
+                        alert('Hata: ' + error.message);
+                        setIsSyncing(false);
+                    });
+            };
+            
+            // Puan kaydet
+            const savePoints = () => {
+                if (!shiftDate) {
+                    alert('Önce Liste Hazırla sekmesinden tarihi kaydediniz');
+                    return;
+                }
+                
+                const pointInputs = document.querySelectorAll('.point-input');
+                let totalPoints = 0;
+                const memberCount = pointInputs.length;
+                const pointsMap = {};
+                
+                pointInputs.forEach(input => {
+                    const points = parseInt(input.value) || 0;
+                    const id = parseInt(input.dataset.id);
+                    pointsMap[id] = points;
+                    totalPoints += points;
+                });
+                
+                const avgPoints = memberCount > 0 ? Math.round((totalPoints / memberCount) * 10) / 10 : 0;
+                
+                setIsSyncing(true);
+                
+                // Tüm personeli güncelle
+                const updates = {};
+                personData.forEach(p => {
+                    let newPoints = p.points;
+                    
+                    if (!currentShift.members.includes(p.id)) {
+                        newPoints += avgPoints;
+                    } else if (pointsMap[p.id] !== undefined) {
+                        newPoints += pointsMap[p.id];
+                    }
+                    
+                    updates[`personel/${p.id}/points`] = newPoints;
+                });
+                
+                database.ref().update(updates)
+                    .then(() => {
+                        setIsSyncing(false);
+                        alert(`Puanlar kaydedildi.\nOrtalama puan: ${avgPoints}p`);
+                    })
+                    .catch(error => {
+                        alert('Hata: ' + error.message);
+                        setIsSyncing(false);
+                    });
+            };
+            
+            // Nöbetçi atama
+            const setNobetci = (id) => {
+                setIsSyncing(true);
+                database.ref('shift/nobetci').set(id)
+                    .then(() => setIsSyncing(false))
+                    .catch(error => {
+                        alert('Hata: ' + error.message);
+                        setIsSyncing(false);
+                    });
+            };
+            
+            // Nihai liste
+            const getFinalList = () => {
+                const selected = personData.filter(p => currentShift.members.includes(p.id));
+                return selected.sort((a, b) => {
+                    if (b.points !== a.points) return b.points - a.points;
+                    return Math.random() - 0.5;
+                });
+            };
+            
+            const finalList = getFinalList();
+            
+            if (loading) {
+                return (
+                    <div className="app-container">
+                        <div className="loading">
+                            <i className="fas fa-spinner"></i>
+                            <p>Yükleniyor...</p>
+                        </div>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="app-container">
+                    <div className="header">
+                        <h1><i className="fas fa-list-check"></i> Vardiya Eksilme Listesi</h1>
+                        <p>Personel yönetimi ve vardiya planlaması sistemi</p>
+                        <div className={`status-badge ${online ? 'online' : 'offline'}`}>
+                            <i className={`fas fa-${online ? 'circle' : 'exclamation-circle'}`}></i> {online ? 'Çevrimiçi' : 'Çevrimdışı'}
+                            {isSyncing && ' (Senkronize ediliyor...)'}
+                        </div>
+                    </div>
+                    
+                    <div className="tabs">
+                        {[
+                            { id: 'isimler', icon: 'fas fa-users', label: 'İsim Listesi' },
+                            { id: 'hazirla', icon: 'fas fa-clipboard', label: 'Liste Hazırla' },
+                            { id: 'puan', icon: 'fas fa-chart-bar', label: 'Puan Girişi' },
+                            { id: 'nobetci', icon: 'fas fa-user-check', label: 'Nöbetçi' },
+                            { id: 'nihai', icon: 'fas fa-list', label: 'Nihai Liste' }
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                                onClick={() => setActiveTab(tab.id)}
+                            >
+                                <i className={tab.icon}></i> {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* İSİM LİSTESİ */}
+                    {activeTab === 'isimler' && (
+                        <div className="tab-content">
+                            <h2 style={{ marginBottom: '1.5rem' }}>Personel Listesi Yönetimi</h2>
+                            
+                            <div className="grid-2">
+                                <div className="form-group">
+                                    <label>Rütbe</label>
+                                    <select value={inputRank} onChange={(e) => setInputRank(e.target.value)}>
+                                        <option value="Yzb">Yzb (Yüzbaşı)</option>
+                                        <option value="Bnb">Bnb (Başçavuş)</option>
+                                        <option value="Ütgm">Ütgm (Üstteğmen)</option>
+                                        <option value="Yb">Yb (Yarbay)</option>
+                                    </select>
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Ad Soyad</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Ad Soyad girin"
+                                        value={inputName}
+                                        onChange={(e) => setInputName(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && addPerson()}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Başlangıç Puanı</label>
+                                <input 
+                                    type="number" 
+                                    value={inputPoints}
+                                    onChange={(e) => setInputPoints(e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                            
+                            <div className="form-group">
+                                <label>Renk Seçin</label>
+                                <div className="color-picker">
+                                    {colors.map(color => (
+                                        <div
+                                            key={color}
+                                            className={`color-option ${selectedColor === color ? 'selected' : ''}`}
+                                            style={{ background: color }}
+                                            onClick={() => setSelectedColor(color)}
+                                        ></div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <button 
+                                className="btn btn-primary" 
+                                onClick={addPerson} 
+                                style={{ width: '100%' }}
+                                disabled={isSyncing}
+                            >
+                                <i className="fas fa-plus"></i> Personel Ekle
+                            </button>
+                            
+                            <div style={{ marginTop: '2rem' }}>
+                                <h3 style={{ marginBottom: '1rem' }}>Mevcut Personel ({personData.length})</h3>
+                                {personData.length === 0 ? (
+                                    <div className="empty-state">
+                                        <i className="fas fa-user-slash"></i>
+                                        <p>Henüz personel eklenmedi</p>
+                                    </div>
+                                ) : (
+                                    <div className="person-list">
+                                        {personData.map(person => (
+                                            <div key={person.id} className="person-item">
+                                                <div 
+                                                    className="person-badge"
+                                                    style={{ background: person.color }}
+                                                ></div>
+                                                <div className="person-info">
+                                                    <div className="person-name">{person.rank}. {person.name}</div>
+                                                    <div className="person-rank">Eklenme: {person.createdDate}</div>
+                                                </div>
+                                                <div className="person-points">{person.points}p</div>
+                                                <div className="person-actions">
+                                                    <button 
+                                                        className="btn btn-danger btn-sm" 
+                                                        onClick={() => deletePerson(person.id)}
+                                                        disabled={isSyncing}
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* LİSTE HAZIRLA */}
+                    {activeTab === 'hazirla' && (
+                        <div className="tab-content">
+                            <h2 style={{ marginBottom: '1.5rem' }}>Vardiya Hazırlığı</h2>
+                            
+                            <div className="form-group">
+                                <label>Vardiya Tarihi</label>
+                                <input 
+                                    type="date"
+                                    value={shiftDate}
+                                    onChange={(e) => setShiftDate(e.target.value)}
+                                />
+                            </div>
+                            
+                            <button 
+                                className="btn btn-primary" 
+                                onClick={saveShiftDate} 
+                                style={{ marginBottom: '2rem' }}
+                                disabled={isSyncing}
+                            >
+                                <i className="fas fa-save"></i> Tarihi Kaydet
+                            </button>
+                            
+                            <h3 style={{ marginBottom: '1rem' }}>Gelecek Personel Seçin</h3>
+                            {personData.length === 0 ? (
+                                <div className="empty-state">
+                                    <i className="fas fa-inbox"></i>
+                                    <p>Önce İsim Listesi sekmesinden personel ekleyiniz</p>
+                                </div>
+                            ) : (
+                                personData.map(person => (
+                                    <label key={person.id} className="checkbox-item">
+                                        <input 
+                                            type="checkbox"
+                                            checked={currentShift.members.includes(person.id)}
+                                            onChange={() => toggleShiftMember(person.id)}
+                                            disabled={isSyncing}
+                                        />
+                                        <div className="checkbox-label">
+                                            <div className="checkbox-name" style={{ color: person.color }}>
+                                                {person.rank}. {person.name}
+                                            </div>
+                                        </div>
+                                    </label>
+                                ))
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* PUAN GİRİŞİ */}
+                    {activeTab === 'puan' && (
+                        <div className="tab-content">
+                            <h2 style={{ marginBottom: '1.5rem' }}>Vardiya Puanı Girişi</h2>
+                            
+                            {!shiftDate && (
+                                <div className="info-box">
+                                    <i className="fas fa-info-circle"></i> Önce Liste Hazırla sekmesinden tarihi kaydediniz
+                                </div>
+                            )}
+                            
+                            {shiftDate && (
+                                <div className="info-box">
+                                    <strong>Tarih:</strong> {shiftDate} | <strong>Seçili:</strong> {currentShift.members.length} kişi
+                                </div>
+                            )}
+                            
+                            <h3 style={{ marginBottom: '1rem' }}>Personele Puan Verin</h3>
+                            {currentShift.members.length === 0 ? (
+                                <div className="empty-state">
+                                    <i className="fas fa-star"></i>
+                                    <p>Henüz personel seçilmedi</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {personData
+                                        .filter(p => currentShift.members.includes(p.id))
+                                        .map(person => (
+                                            <div key={person.id} className="point-input-group">
+                                                <label style={{ margin: 0 }}>
+                                                    <div className="checkbox-name">{person.rank}. {person.name}</div>
+                                                </label>
+                                                <input 
+                                                    type="number"
+                                                    className="point-input"
+                                                    data-id={person.id}
+                                                    defaultValue="0"
+                                                    min="0"
+                                                />
+                                            </div>
+                                        ))}
+                                    
+                                    <button 
+                                        className="btn btn-primary" 
+                                        onClick={savePoints} 
+                                        style={{ width: '100%', marginTop: '1.5rem' }}
+                                        disabled={isSyncing}
+                                    >
+                                        <i className="fas fa-calculator"></i> Puanları Kaydet ve Hesapla
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* NÖBETÇİ */}
+                    {activeTab === 'nobetci' && (
+                        <div className="tab-content">
+                            <h2 style={{ marginBottom: '1.5rem' }}>Nöbetçi Personel Seçimi</h2>
+                            
+                            {currentShift.members.length === 0 ? (
+                                <div className="empty-state">
+                                    <i className="fas fa-user"></i>
+                                    <p>Henüz personel seçilmedi</p>
+                                </div>
+                            ) : (
+                                personData
+                                    .filter(p => currentShift.members.includes(p.id))
+                                    .map(person => (
+                                        <label key={person.id} className="checkbox-item">
+                                            <input 
+                                                type="radio"
+                                                name="nobetci"
+                                                checked={currentShift.nobetci === person.id}
+                                                onChange={() => setNobetci(person.id)}
+                                                disabled={isSyncing}
+                                            />
+                                            <div className="checkbox-label">
+                                                <div className="checkbox-name" style={{ color: person.color }}>
+                                                    {person.rank}. {person.name}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    ))
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* NİHAİ LİSTE */}
+                    {activeTab === 'nihai' && (
+                        <div className="tab-content">
+                            <h2 style={{ marginBottom: '1.5rem' }}>Vardiya Listesi</h2>
+                            
+                            <div className="info-box">
+                                <strong>Tarih:</strong> {currentShift.date || '-'} | <strong>Toplam:</strong> {finalList.length} personel
+                            </div>
+                            
+                            {finalList.length === 0 ? (
+                                <div className="empty-state">
+                                    <i className="fas fa-file-excel"></i>
+                                    <p>Liste hazır değil. Önce personel seçip puanlarını giriniz</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="final-list">
+                                        {finalList
+                                            .filter(p => p.id !== currentShift.nobetci)
+                                            .map((person, idx) => (
+                                                <div key={person.id} className="final-item" style={{ background: person.color }}>
+                                                    <div className="final-number">{idx + 1}</div>
+                                                    <div className="final-name">{person.rank}. {person.name}</div>
+                                                    <div className="final-points">{person.points}p</div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                    
+                                    {currentShift.nobetci && (
+                                        <div className="nob-section">
+                                            <div className="nob-title">🔔 Nöbetçi Personel</div>
+                                            <div className="nob-name">
+                                                {personData.find(p => p.id === currentShift.nobetci)?.rank}. {personData.find(p => p.id === currentShift.nobetci)?.name}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
