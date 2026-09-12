@@ -892,6 +892,14 @@
   </footer>
 </div>
 
+<div id="haritaModal" style="display:none;position:fixed;inset:0;background:rgba(5,15,25,0.96);z-index:9999;">
+  <button id="haritaKapatBtn" style="position:absolute;top:14px;right:14px;z-index:10000;width:40px;height:40px;border:none;border-radius:10px;background:rgba(255,255,255,0.9);color:#08243d;font-size:18px;font-weight:800;">✕</button>
+  <div id="haritaZoomWrap" style="width:100%;height:100%;overflow:hidden;touch-action:none;display:flex;align-items:center;justify-content:center;">
+    <img id="haritaZoomImg" src="tma-harita.jpg" style="max-width:none;transform-origin:0 0;will-change:transform;">
+  </div>
+  <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.6);font-size:11px;">İki parmakla yakınlaştır · tek parmakla kaydır</div>
+</div>
+
 <script>
 function formatTime(date){
   const h = date.getHours().toString().padStart(2,'0');
@@ -1962,14 +1970,6 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
-
-<div id="haritaModal" style="display:none;position:fixed;inset:0;background:rgba(5,15,25,0.96);z-index:9999;">
-  <button id="haritaKapatBtn" style="position:absolute;top:14px;right:14px;z-index:10000;width:40px;height:40px;border:none;border-radius:10px;background:rgba(255,255,255,0.9);color:#08243d;font-size:18px;font-weight:800;">✕</button>
-  <div id="haritaZoomWrap" style="width:100%;height:100%;overflow:hidden;touch-action:none;display:flex;align-items:center;justify-content:center;">
-    <img id="haritaZoomImg" src="tma-harita.jpg" style="max-width:none;transform-origin:0 0;will-change:transform;">
-  </div>
-  <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.6);font-size:11px;">İki parmakla yakınlaştır · tek parmakla kaydır</div>
-</div>
 
 </body>
 </html>
