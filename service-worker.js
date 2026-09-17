@@ -1,4 +1,4 @@
-const CACHE_NAME = "tb2-hesaplayici-v3";
+const CACHE_NAME = "tb2-hesaplayici-v4";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
@@ -24,7 +24,23 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+  const req = event.request;
+  const kabulBasligi = req.headers.get('accept') || '';
+  const htmlIstegi = req.mode === 'navigate' || kabulBasligi.includes('text/html');
+
+  if(htmlIstegi){
+    // HTML: ÖNCE AĞDAN dene (her zaman en güncel sürüm), çevrimdışıysa önbelleğe düş
+    event.respondWith(
+      fetch(req).then((res) => {
+        const kopya = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(req, kopya));
+        return res;
+      }).catch(() => caches.match(req))
+    );
+  }else{
+    // Diğer statik dosyalar: önbellekten hızlı göster, yoksa ağdan çek
+    event.respondWith(
+      caches.match(req).then((cached) => cached || fetch(req))
+    );
+  }
 });
